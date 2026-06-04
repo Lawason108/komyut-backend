@@ -1,0 +1,3738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Komyut Admin — Command Center</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" onerror="this.remove()"/>
+<script>
+  // Load Leaflet defensively: no SRI/crossorigin (those break under content:// and
+  // some Android webviews), async, and the whole app still works if it never loads.
+  (function(){
+    try {
+      var s = document.createElement('script');
+      s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      s.async = true;
+      s.onload = function(){ try { if (typeof renderLiveMap === 'function') renderLiveMap(); } catch(e){} };
+      s.onerror = function(){ window._leafletFailed = true; };
+      document.head.appendChild(s);
+    } catch(e) { window._leafletFailed = true; }
+  })();
+</script>
+<style>
+:root{
+  --bg:#0b1120;
+  --panel:#111827;
+  --panel2:#1f2937;
+  --line:rgba(255,255,255,.08);
+  --blue:#2563eb;
+  --green:#16a34a;
+  --orange:#ea580c;
+  --red:#dc2626;
+  --gold:#ca8a04;
+  --text:#fff;
+  --muted:#94a3b8;
+}
+:root[data-theme="light"]{
+  --bg:#f1f5f9;
+  --panel:#ffffff;
+  --panel2:#f1f5f9;
+  --line:rgba(0,0,0,.10);
+  --blue:#1d4ed8;
+  --green:#15803d;
+  --orange:#c2410c;
+  --red:#b91c1c;
+  --gold:#a16207;
+  --text:#0f172a;
+  --muted:#64748b;
+}
+body{transition:background .2s,color .2s;}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:Inter,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  display:flex;
+  height:100vh;
+  overflow:hidden;
+}
+.sidebar{
+  width:clamp(220px, 22vw, 280px);
+  flex-shrink:0;
+  background:#0f172a;
+  border-right:1px solid var(--line);
+  padding:24px;
+  display:flex;
+  flex-direction:column;
+  overflow-y:auto;
+}
+.brand{font-size:26px;font-weight:800;margin-bottom:24px;}
+.nav button{
+  width:100%;
+  border:none;
+  background:transparent;
+  color:#fff;
+  padding:12px 14px;
+  border-radius:12px;
+  margin-bottom:6px;
+  cursor:pointer;
+  text-align:left;
+  font-size:14px;
+  font-weight:500;
+  transition:.15s;
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.nav button:hover{background:var(--panel2);}
+.nav button.active{background:var(--blue);}
+.nav .divider{height:1px;background:var(--line);margin:12px 0;}
+.sync-card{
+  margin-top:auto;
+  background:var(--panel);
+  padding:16px;
+  border-radius:18px;
+  border:1px solid var(--line);
+}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;margin-right:6px;animation:pulse 1.5s infinite;}
+@keyframes pulse{50%{opacity:.5}}
+.main{flex:1;overflow:auto;padding:28px;min-width:0;}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;}
+.title{font-size:30px;font-weight:800;}
+.subtitle{color:var(--muted);margin-top:4px;font-size:14px;}
+.top-actions{display:flex;gap:12px;align-items:center;}
+.clock{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;}
+.btn{
+  border:none;
+  padding:10px 16px;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:600;
+  font-size:13px;
+  font-family:Inter,sans-serif;
+}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:var(--red);color:#fff}
+.btn-ghost{background:var(--panel2);color:#fff}
+.btn:hover{filter:brightness(1.1)}
+.btn:active{transform:scale(.98)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:22px;}
+.card{
+  background:var(--panel);
+  border-radius:18px;
+  padding:20px;
+  border:1px solid var(--line);
+  min-width:0;
+}
+.metric{font-size:clamp(22px,4.5vw,32px);font-weight:800;margin-top:6px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.metric-delta{font-size:12px;margin-top:4px;color:var(--muted);}
+.label{font-size:13px;color:var(--muted);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.layout{display:grid;grid-template-columns:2fr 1fr;gap:18px;margin-top:18px;min-width:0;}
+@media (max-width: 760px){ .layout{grid-template-columns:1fr;} }
+.table{width:100%;border-collapse:collapse;margin-top:12px;table-layout:auto;}
+.table th{padding:10px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;}
+.table td{padding:12px;border-bottom:1px solid var(--line);font-size:13px;word-break:break-word;}
+/* Tables scroll horizontally instead of clipping in narrow / device-emulation modes */
+.card > .table, .panel > .table { display:table; }
+.table-scroll{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.table tr:hover td{background:rgba(255,255,255,.02);}
+.badge{padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;display:inline-block;text-transform:uppercase;letter-spacing:.04em;}
+.badge.live{background:var(--green);color:#fff}
+.badge.completed{background:#1e40af;color:#fff}
+.badge.accepted{background:var(--orange);color:#fff}
+.badge.booked{background:#475569;color:#fff}
+.badge.cancelled{background:var(--red);color:#fff}
+.badge.in-progress{background:var(--green);color:#fff;animation:pulse 1.5s infinite}
+.logs{display:flex;flex-direction:column;gap:8px;max-height:520px;overflow:auto;margin-top:12px;}
+.log{
+  background:var(--panel2);
+  padding:12px 14px;
+  border-radius:12px;
+  font-size:13px;
+  line-height:1.5;
+  border-left:3px solid var(--blue);
+}
+.log.sos{border-left-color:var(--red);background:rgba(220,38,38,.1);}
+.log.dispatch{border-left-color:var(--gold);}
+.log .log-time{font-size:11px;color:var(--muted);margin-top:4px;}
+.section-title{font-size:18px;font-weight:700;margin-bottom:4px;}
+.section-subtitle{font-size:12px;color:var(--muted);margin-bottom:12px;}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px;min-width:0;}
+.split > *{min-width:0;}
+.status-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);font-size:13px;}
+.status-row:last-child{border:none}
+.status-row span:first-child{color:var(--muted);}
+.status-row strong{color:#fff;}
+.input,.select{
+  width:100%;
+  padding:11px 14px;
+  border-radius:10px;
+  background:#0f172a;
+  color:#fff;
+  border:1px solid var(--line);
+  margin-bottom:10px;
+  font-family:Inter,sans-serif;
+  font-size:13px;
+}
+.input:focus,.select:focus{outline:none;border-color:var(--blue);}
+.sos-card{
+  background:rgba(220,38,38,.1);
+  border:1px solid rgba(220,38,38,.3);
+  border-radius:14px;
+  padding:14px;
+  margin-bottom:10px;
+}
+.sos-title{font-weight:700;color:#fca5a5;display:flex;align-items:center;gap:8px;}
+.sos-meta{font-size:12px;color:var(--muted);margin-top:6px;}
+.sos-actions{display:flex;gap:8px;margin-top:10px;}
+.sos-actions button{font-size:11px;padding:6px 10px;border-radius:8px;}
+.empty{padding:24px;text-align:center;color:var(--muted);font-size:13px;}
+.view{display:none;}
+.view.active{display:block;}
+.footer{margin-top:22px;font-size:12px;opacity:.5;padding-bottom:24px;}
+.tab-bar{display:flex;gap:6px;background:var(--panel2);padding:4px;border-radius:10px;margin-bottom:14px;width:fit-content;}
+.tab-bar button{background:transparent;color:var(--muted);border:none;padding:8px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;}
+.tab-bar button.active{background:var(--blue);color:#fff;}
+.kbd{font-family:'JetBrains Mono',monospace;background:var(--panel2);padding:2px 6px;border-radius:4px;font-size:11px;}
+@media(max-width:1200px){.grid{grid-template-columns:repeat(2,1fr)}.layout,.split{grid-template-columns:1fr}}
+@media(max-width:640px){.grid{grid-template-columns:1fr}.top{flex-direction:column;align-items:flex-start;gap:12px;}}
+
+  /* Tables never overflow the card — they scroll inside it */
+  .card { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .view.active { display: block; padding-bottom: 32px; }
+  .view .card { margin-bottom: 16px; }
+
+  .card, .badge, .table td, .log {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+  .table td {
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .table td.kbd-wide { max-width: 120px; }
+  .metric { font-size: 28px; }
+  .metric-delta, .label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log { word-break: break-word; }
+
+  /* Better dispatch UI */
+  .dispatch-driver-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--panel2);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+  }
+  .dispatch-driver-card.selected { border-color: var(--blue); }
+  .dispatch-driver-card .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--blue); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+    flex-shrink: 0;
+  }
+  .dispatch-driver-card .driver-meta {
+    flex: 1; min-width: 0;
+  }
+  .dispatch-driver-card .driver-name {
+    font-weight: 600; font-size: 14px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .dispatch-driver-card .driver-detail {
+    font-size: 11px; color: var(--muted);
+    margin-top: 2px;
+  }
+  .dispatch-driver-card .driver-rating {
+    background: var(--green); color: white;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .dispatch-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .dispatch-stat {
+    background: var(--panel2);
+    padding: 10px; border-radius: 10px; text-align: center;
+  }
+  .dispatch-stat-value { font-size: 18px; font-weight: 700; }
+  .dispatch-stat-label { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .route-request-card {
+    background: var(--gold-soft, rgba(202, 138, 4, 0.1));
+    border-left: 3px solid var(--gold);
+    padding: 14px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+  .route-request-card .rr-header {
+    display: flex; justify-content: space-between;
+    align-items: center; margin-bottom: 8px;
+  }
+  .route-request-card .rr-title { font-weight: 700; font-size: 14px; }
+  .route-request-card .rr-meta { font-size: 11px; color: var(--muted); }
+  .route-request-card .rr-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .route-request-card .rr-actions button {
+    font-size: 11px; padding: 6px 12px; border-radius: 8px;
+  }
+
+  /* ============ ADMIN FEATURE CONTROLS ============ */
+  .ac-input, .ac-select {
+    padding: 10px 12px; background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 8px; color: var(--text); font-size: 13px; outline: none;
+    font-family: Inter, sans-serif; width: 100%; margin-bottom: 12px;
+  }
+  .ac-input:focus, .ac-select:focus { border-color: var(--blue); }
+  .ac-label { display:block; font-size:11px; font-weight:600; color:var(--muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:.05em; }
+  .ac-select { width:auto; min-width:160px; cursor:pointer; }
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 20px; }
+  .modal-overlay.active { display: flex; }
+  .modal-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 22px; width: 100%; max-width: 460px; color: var(--text); max-height: 88vh; overflow-y: auto; }
+  .modal-card .btn { padding: 9px 14px; border-radius: 9px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; }
+  .btn-green { background: var(--green); color: #fff; }
+  .badge.ac-active { background: rgba(16,185,129,0.15); color: var(--green); }
+  .badge.ac-pending { background: rgba(202,138,4,0.18); color: var(--gold); }
+  .badge.ac-blocked { background: rgba(220,38,38,0.18); color: #f87171; }
+  .ac-mini-btn { font-size:11px; padding:5px 10px; border-radius:7px; border:none; cursor:pointer; font-weight:600; font-family:Inter,sans-serif; }
+  .utab-badge { display:none; background:var(--red); color:#fff; font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; margin-left:6px; }
+  .muted-count { color:var(--muted); font-size:12px; font-weight:500; }
+  .ac-staff-card { background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; }
+  .ac-result-row { padding:10px 12px; border-bottom:1px solid var(--line); cursor:pointer; border-radius:8px; }
+  .ac-result-row:hover { background:var(--panel2); }
+
+  /* ============ ADMIN LOGIN OVERLAY ============ */
+  body.admin-locked > .sidebar,
+  body.admin-locked > .main { display: none !important; }
+  body.admin-locked { display: block; overflow: hidden; height: 100vh; }
+
+  #admin-login-overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 9999;
+    background:
+      radial-gradient(circle at 20% 20%, rgba(37,99,235,0.10), transparent 45%),
+      radial-gradient(circle at 80% 80%, rgba(202,138,4,0.06), transparent 50%),
+      var(--bg);
+    overflow: hidden;
+  }
+  body.admin-locked #admin-login-overlay { display: flex; align-items: center; justify-content: center; padding: 32px; }
+
+  /* Subtle grid texture in the background */
+  #admin-login-overlay::before {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+  }
+
+  .admin-login-card {
+    position: relative; z-index: 1;
+    width: 100%; max-width: 440px;
+    background: linear-gradient(180deg, rgba(31,41,55,0.95) 0%, rgba(17,24,39,0.95) 100%);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    padding: 36px 36px 28px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+    backdrop-filter: blur(20px);
+  }
+  .admin-login-brand {
+    display: flex; align-items: center; gap: 12px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 24px;
+  }
+  .admin-login-mark {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: linear-gradient(135deg, var(--blue) 0%, #1e40af 100%);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 22px;
+    box-shadow: 0 6px 20px rgba(37,99,235,0.35);
+  }
+  .admin-login-brand-text { flex: 1; }
+  .admin-login-brand-title {
+    font-size: 16px; font-weight: 700; letter-spacing: -0.01em;
+    color: #fff;
+  }
+  .admin-login-brand-sub {
+    font-size: 11px; color: var(--muted); margin-top: 2px;
+    letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500;
+  }
+  .admin-login-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(22,163,74,0.12); color: #4ade80;
+    padding: 4px 10px; border-radius: 999px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    border: 1px solid rgba(22,163,74,0.25);
+  }
+  .admin-login-badge::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%; background: #4ade80;
+    box-shadow: 0 0 8px #4ade80;
+    animation: pulse-admin 2s infinite;
+  }
+  @keyframes pulse-admin {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(1.3); }
+  }
+
+  .admin-login-title {
+    font-size: 24px; font-weight: 800; letter-spacing: -0.02em;
+    color: #fff; margin-bottom: 4px;
+  }
+  .admin-login-subtitle {
+    font-size: 13px; color: var(--muted); line-height: 1.5;
+    margin-bottom: 24px;
+  }
+
+  .admin-login-field { margin-bottom: 16px; }
+  .admin-login-label {
+    display: block; font-size: 11px; font-weight: 600;
+    color: var(--muted); margin-bottom: 8px;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+  .admin-login-input-wrap { position: relative; }
+  .admin-login-input-icon {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    color: var(--muted); font-size: 16px; pointer-events: none;
+  }
+  .admin-login-input {
+    width: 100%; padding: 13px 14px 13px 42px;
+    background: rgba(11,17,32,0.6);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: #fff; font-size: 14px;
+    font-family: Inter, sans-serif;
+    transition: all 0.15s;
+    outline: none;
+  }
+  .admin-login-input:focus {
+    border-color: var(--blue);
+    background: rgba(11,17,32,0.9);
+    box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+  }
+  .admin-login-input::placeholder { color: rgba(148,163,184,0.5); }
+  .admin-login-eye {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    background: transparent; border: none; cursor: pointer;
+    color: var(--muted); font-size: 14px; padding: 4px 8px;
+    border-radius: 6px;
+  }
+  .admin-login-eye:hover { color: #fff; background: rgba(255,255,255,0.05); }
+
+  .admin-login-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 4px 0 20px; font-size: 12px;
+  }
+  .admin-login-check {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: var(--muted); cursor: pointer; user-select: none;
+  }
+  .admin-login-check input[type="checkbox"] {
+    width: 14px; height: 14px; accent-color: var(--blue); cursor: pointer;
+  }
+  .admin-login-forgot {
+    color: var(--blue); font-weight: 600; cursor: pointer; text-decoration: none;
+  }
+  .admin-login-forgot:hover { text-decoration: underline; }
+
+  .admin-login-btn {
+    width: 100%; padding: 13px;
+    background: linear-gradient(180deg, var(--blue) 0%, #1d4ed8 100%);
+    color: #fff; font-weight: 700; font-size: 14px;
+    border: none; border-radius: 10px; cursor: pointer;
+    font-family: Inter, sans-serif;
+    letter-spacing: 0.01em;
+    transition: all 0.15s;
+    box-shadow: 0 6px 18px rgba(37,99,235,0.3), inset 0 1px 0 rgba(255,255,255,0.15);
+  }
+  .admin-login-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .admin-login-btn:active { transform: translateY(0); }
+  .admin-login-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  .admin-login-divider {
+    display: flex; align-items: center; gap: 12px;
+    margin: 20px 0 16px;
+    font-size: 10px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600;
+  }
+  .admin-login-divider::before,
+  .admin-login-divider::after {
+    content: ""; flex: 1; height: 1px; background: var(--line);
+  }
+
+  .admin-login-mfa {
+    background: rgba(37,99,235,0.06);
+    border: 1px solid rgba(37,99,235,0.18);
+    border-radius: 10px; padding: 12px 14px;
+    display: flex; align-items: center; gap: 10px;
+    font-size: 12px; color: var(--muted);
+  }
+  .admin-login-mfa-icon { font-size: 18px; }
+  .admin-login-mfa strong { color: #fff; font-weight: 600; }
+
+  .admin-login-error {
+    background: rgba(220,38,38,0.1);
+    border: 1px solid rgba(220,38,38,0.3);
+    color: #fca5a5;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-bottom: 16px;
+    display: none;
+    align-items: center;
+    gap: 8px;
+  }
+  .admin-login-error.active { display: flex; animation: shake-admin 0.3s; }
+  @keyframes shake-admin {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+  }
+
+  .admin-login-footer {
+    text-align: center; margin-top: 22px; padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 11px; color: var(--muted); line-height: 1.6;
+  }
+  .admin-login-footer strong { color: #cbd5e1; font-weight: 600; }
+
+  .admin-login-hint {
+    text-align: center; margin-top: 14px;
+    font-size: 11px; color: var(--muted);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    background: rgba(255,255,255,0.03);
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    padding: 8px 10px;
+  }
+
+  /* Admin top bar user chip */
+  .admin-user-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 6px 12px 6px 6px; border-radius: 999px;
+    color: #fff; font-size: 12px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .admin-user-chip:hover { background: var(--panel2); }
+  .admin-user-chip-avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue) 0%, #1e40af 100%);
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .admin-user-chip-role {
+    color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  .admin-logout-menu {
+    position: absolute; bottom: 56px; left: 0; right: 0;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 6px;
+    box-shadow: 0 -12px 40px rgba(0,0,0,0.5);
+    display: none;
+    z-index: 100;
+  }
+  .admin-logout-menu.active { display: block; }
+  .admin-logout-menu button {
+    width: 100%; padding: 10px 12px;
+    background: transparent; color: #fff; border: none; border-radius: 8px;
+    text-align: left; cursor: pointer; font-size: 13px;
+    font-family: Inter, sans-serif;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .admin-logout-menu button:hover { background: var(--panel2); }
+  .admin-logout-menu .menu-divider { height: 1px; background: var(--line); margin: 4px 0; }
+
+  @keyframes livePulse { 0%{transform:scale(0.6);opacity:0.5} 70%{transform:scale(1.4);opacity:0} 100%{opacity:0} }
+  .live-marker { background: transparent; border: none; }
+  /* Keep Leaflet controls legible on the dark dashboard */
+  .leaflet-container { background: #0f1825; font-family: 'Inter', sans-serif; }
+  .leaflet-control-attribution { background: rgba(17,24,39,0.7) !important; color: #94a3b8 !important; }
+  .leaflet-control-attribution a { color: #cbd5e1 !important; }
+
+
+  /* ════════════════════════════════════════════════════════════
+     v3.1 ADMIN CORRECTIVE LAYER
+     Fixes text overflow/overlap, spacing, and mobile-desktop-mode
+     rendering reported across Dashboard, Trips, Users, Audit Logs.
+     ════════════════════════════════════════════════════════════ */
+
+  /* Global: nothing clips; long strings wrap instead of overlapping */
+  * { min-width: 0; }
+  .main { padding: clamp(16px, 3vw, 28px); }
+  .card, .panel, .status-row, .log, .sos-card { overflow-wrap: anywhere; word-break: break-word; }
+
+  /* Metric cards: keep the number + label on their own tidy lines,
+     auto-fit the value so "Accepted"/"Revenue"/"Code" never overlap */
+  .grid { gap: 18px; }
+  .card .metric { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.15; }
+  .card .label  { white-space: normal; line-height: 1.3; }
+  .card .metric-delta { white-space: normal; line-height: 1.3; }
+
+  /* Tables: always scroll horizontally inside their card, never clip.
+     Headers and cells get consistent padding and stop wrapping mid-word. */
+  .table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .table { min-width: 560px; }            /* forces horizontal scroll instead of crushing columns */
+  .table th, .table td { padding: 12px 14px; vertical-align: middle; white-space: nowrap; }
+  .table td.wrap, .table th.wrap { white-space: normal; }
+  .table td .badge { white-space: nowrap; }
+
+  /* Status rows (member/driver detail): label left, value right, no collision */
+  .status-row { gap: 14px; align-items: baseline; padding: 10px 0; }
+  .status-row span:first-child { flex: 0 0 auto; }
+  .status-row strong { text-align: right; overflow-wrap: anywhere; }
+
+  /* Audit logs: give each entry room to breathe (admin fix #3) */
+  .logs { gap: 12px; padding: 4px; }
+  .log { padding: 14px 16px; line-height: 1.55; }
+  .log .log-time { margin-top: 6px; }
+
+  /* Card / section vertical rhythm so nothing looks packed (admin fix #4) */
+  .card { padding: clamp(16px, 2.4vw, 22px); margin-bottom: 18px; }
+  .section-title { margin-bottom: 6px; }
+  .section-subtitle { margin-bottom: 14px; }
+  .split, .layout { gap: 20px; margin-top: 20px; }
+  .view.active { padding-bottom: 40px; }
+
+  /* Tab bars & search inputs: spacing + full-width on small screens */
+  .tab-bar { flex-wrap: wrap; gap: 8px; }
+  .ac-input, .input, .select, .ac-select { box-sizing: border-box; }
+
+  /* Dispatch stat grid: fit values cleanly, never overlap */
+  .dispatch-stat-grid { gap: 14px; }
+  .dispatch-stat-grid .metric, .dispatch-stat-grid strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* Buttons inside table action cells stay on one line and wrap as a group */
+  td .btn, .status-row .btn { white-space: nowrap; }
+  .row-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* Drill-down modal for user/driver registration data (admin #5,#6,#10) */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; z-index: 200; overflow-y: auto; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; width: 100%; max-width: 560px; padding: 24px; }
+  .modal-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; gap: 12px; }
+  .modal-head .title { font-size: 22px; }
+  .modal-close { background: var(--panel2); border: none; color: #fff; width: 34px; height: 34px; border-radius: 9px; cursor: pointer; font-size: 16px; flex-shrink: 0; }
+  .modal .doc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px,1fr)); gap: 10px; margin-top: 12px; }
+  .modal .doc-thumb { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel2); }
+  .modal .doc-thumb img { width: 100%; height: 96px; object-fit: cover; display: block; }
+  .modal .doc-thumb .doc-cap { padding: 6px 8px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; gap: 6px; }
+  .modal .modal-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
+  .perm-hidden { display: none !important; }
+
+  /* Make clickable rows obviously interactive */
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { background: rgba(255,255,255,.04); }
+
+</style>
+
+<script>
+window.KomyutStore = window.KomyutStore || {
+  key: 'komyut-platform-store-v2',
+
+  getStore: function () {
+    try {
+      return JSON.parse(localStorage.getItem(this.key)) || {
+        users: { members: [], drivers: [], admins: [] },
+        chats: [],
+        trips: [],
+        logs: []
+      };
+    } catch (e) {
+      return {
+        users: { members: [], drivers: [], admins: [] },
+        chats: [],
+        trips: [],
+        logs: []
+      };
+    }
+  },
+
+  setStore: function (payload) {
+    localStorage.setItem(this.key, JSON.stringify(payload));
+    window.dispatchEvent(new CustomEvent('komyut-sync', { detail: payload }));
+  },
+
+  clone: function (obj) {
+    try {
+      return structuredClone(obj);
+    } catch (e) {
+      return JSON.parse(JSON.stringify(obj));
+    }
+  }
+};
+
+/**
+ * Escape untrusted text before injecting into innerHTML. Prevents stored XSS
+ * via user-controlled fields (member/driver names, chat messages, broadcast
+ * bodies, support tickets) that surface in the admin console.
+ */
+window.escapeHtml = function (value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+</script>
+
+</head>
+<body class="admin-locked">
+
+<!-- ============ ADMIN LOGIN OVERLAY ============ -->
+<div id="admin-login-overlay">
+  <div class="admin-login-card">
+    <div class="admin-login-brand">
+      <div class="admin-login-mark">K</div>
+      <div class="admin-login-brand-text">
+        <div class="admin-login-brand-title">Komyut Command Center</div>
+        <div class="admin-login-brand-sub">Pro Enterprise Console</div>
+      </div>
+      <div class="admin-login-badge">Secure</div>
+    </div>
+
+    <div class="admin-login-title">Sign in</div>
+    <div class="admin-login-subtitle">Authorized personnel only. All activity in this console is logged and audited.</div>
+
+    <div class="admin-login-error" id="admin-login-error">
+      <span>⚠</span><span id="admin-login-error-text">Invalid credentials</span>
+    </div>
+
+    <form id="admin-login-form" autocomplete="off" onsubmit="return adminLoginSubmit(event)">
+      <div class="admin-login-field">
+        <label class="admin-login-label" for="admin-email">Work Email</label>
+        <div class="admin-login-input-wrap">
+          <span class="admin-login-input-icon">✉</span>
+          <input type="email" id="admin-email" class="admin-login-input"
+                 placeholder="name@komyut.ng" autocomplete="username"
+                 value="" required>
+        </div>
+      </div>
+
+      <div class="admin-login-field">
+        <label class="admin-login-label" for="admin-password">Password</label>
+        <div class="admin-login-input-wrap">
+          <span class="admin-login-input-icon">🔒</span>
+          <input type="password" id="admin-password" class="admin-login-input"
+                 placeholder="••••••••••" autocomplete="current-password"
+                 value="" required>
+          <button type="button" class="admin-login-eye" onclick="adminTogglePassword()" id="admin-eye-btn" tabindex="-1">Show</button>
+        </div>
+      </div>
+
+      <div class="admin-login-row">
+        <label class="admin-login-check">
+          <input type="checkbox" id="admin-remember" checked>
+          <span>Keep me signed in</span>
+        </label>
+        <a class="admin-login-forgot" onclick="adminForgotPassword()">Forgot password?</a>
+      </div>
+
+      <div class="admin-login-field" id="admin-otp-field" style="display:none;">
+        <label class="admin-login-label" for="admin-otp">6-digit authentication code</label>
+        <div class="admin-login-input-wrap">
+          <span class="admin-login-input-icon">🛡</span>
+          <input type="text" id="admin-otp" class="admin-login-input" inputmode="numeric"
+                 maxlength="6" placeholder="••••••" autocomplete="one-time-code"
+                 style="letter-spacing:0.4em;font-family:monospace;">
+        </div>
+        <div id="admin-otp-hint" style="font-size:12px;color:#93c5fd;margin-top:8px;"></div>
+      </div>
+
+      <button type="submit" class="admin-login-btn" id="admin-login-btn">Continue to Console</button>
+    </form>
+
+    <div class="admin-login-divider">Two-factor authentication</div>
+
+    <div class="admin-login-mfa">
+      <span class="admin-login-mfa-icon">🛡</span>
+      <div>
+        After your password is verified, you'll enter a <strong>6-digit code</strong> from your authenticator app to complete sign-in. Enterprise SSO is available — contact your platform owner to enable.
+      </div>
+    </div>
+
+    <div class="admin-login-footer">
+      <strong>Komyut Operations · Port Harcourt, NG</strong><br>
+      v2.1 · ISO 27001 aligned · Bank-grade encryption at rest and in transit
+    </div>
+
+    <div class="admin-login-hint">
+      Authorized personnel only. All sign-in attempts are logged and monitored.
+    </div>
+  </div>
+</div>
+
+<div class="sidebar">
+  <div class="brand">🚐 Komyut Admin</div>
+
+  <div class="nav">
+    <button data-view="dashboard" class="active" onclick="showView('dashboard')">📊 Dashboard</button>
+    <button data-view="trips" onclick="showView('trips')">🚐 Trips</button>
+    <button data-view="dispatch" onclick="showView('dispatch')">📡 Dispatch</button>
+    <button data-view="livemap" onclick="showView('livemap')">🗺️ Live Map</button>
+    <button data-view="safety" onclick="showView('safety')">🛡 Safety</button>
+    <button data-view="broadcasts" onclick="showView('broadcasts')">📢 Broadcasts</button>
+    <button data-view="users" onclick="showView('users')">👥 Users</button>
+    <button data-view="verify" onclick="showView('verify')">✅ Verifications</button>
+    <button data-view="accounts" onclick="showView('accounts')">🚫 Blacklist</button>
+    <button data-view="staff" onclick="showView('staff')">🔐 Admin Staff</button>
+    <button data-view="support" onclick="showView('support')">🎧 Customer Support</button>
+    <button data-view="chatmon" onclick="showView('chatmon')">💬 Chat Monitor</button>
+    <button data-view="logs" onclick="showView('logs')">📜 Audit Logs</button>
+    <div class="divider"></div>
+    <button onclick="forceSync()">🔄 Force Sync</button>
+    <button onclick="resetPlatform()">⚠️ Reset Platform</button>
+  </div>
+
+  <div class="sync-card">
+    <div id="admin-user-chip" onclick="toggleAdminMenu(event)" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:6px;border-radius:10px;margin-bottom:14px;position:relative;background:rgba(255,255,255,0.02);">
+      <div class="admin-user-chip-avatar">A</div>
+      <div style="flex:1;min-width:0;">
+        <div class="admin-user-chip-name" style="font-size:13px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Admin</div>
+        <div class="admin-user-chip-role" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-top:2px;">Loading…</div>
+      </div>
+      <div style="color:var(--muted);font-size:12px;">⌄</div>
+      <div class="admin-logout-menu" id="admin-logout-menu">
+        <button onclick="adminForgotPassword(); toggleAdminMenu();">🔑 Change password</button>
+        <button onclick="event.stopPropagation(); window.KomyutTheme && window.KomyutTheme.set(window.KomyutTheme.get() === 'dark' ? 'light' : 'dark');">🌗 Toggle theme</button>
+        <div class="menu-divider"></div>
+        <button onclick="adminLogout()" style="color:#fca5a5;">⎋ Sign out</button>
+      </div>
+    </div>
+
+    <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Platform Status</div>
+    <div style="font-size:18px;font-weight:700;margin-top:8px;">
+      <span class="sync-dot" id="status-dot"></span><span id="status-text">CONNECTED</span>
+    </div>
+    <div style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5">
+      Member + Driver + Admin real-time sync active. <span class="kbd" id="last-sync">--</span>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- ============ DASHBOARD VIEW ============ -->
+  <div class="view active" id="view-dashboard">
+    <div class="top">
+      <div>
+        <div class="title">Operations</div>
+        <div class="subtitle">Live operations across the Komyut ecosystem · Africa/Lagos</div>
+      </div>
+      <div class="top-actions">
+        <div class="clock" id="clock"></div>
+        <button class="btn btn-primary" onclick="forceSync()">Refresh</button>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="label">Connected Members</div>
+        <div class="metric" id="m-members">0</div>
+        <div class="metric-delta" id="m-members-delta">Active today</div>
+      </div>
+      <div class="card">
+        <div class="label">Online Drivers</div>
+        <div class="metric" id="m-drivers">0</div>
+        <div class="metric-delta" id="m-drivers-delta">Currently on shift</div>
+      </div>
+      <div class="card">
+        <div class="label">Live Trips</div>
+        <div class="metric" id="m-trips">0</div>
+        <div class="metric-delta" id="m-trips-delta">In progress now</div>
+      </div>
+      <div class="card">
+        <div class="label">Today's Revenue</div>
+        <div class="metric" id="m-revenue">₦0</div>
+        <div class="metric-delta" id="m-revenue-delta">Completed trips only</div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <div class="card">
+        <div class="section-title">Real-Time Fleet</div>
+        <div class="section-subtitle">Active trips across all routes today</div>
+        <table class="table">
+          <thead>
+            <tr><th>Route</th><th>Driver</th><th>Member</th><th>Pickup</th><th>Code</th><th>Status</th><th>Revenue</th></tr>
+          </thead>
+          <tbody id="fleet-body"></tbody>
+        </table>
+      </div>
+      <div class="card">
+        <div class="section-title">Live Activity</div>
+        <div class="section-subtitle">Audit log · newest first</div>
+        <div class="logs" id="logs"></div>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="card">
+        <div class="section-title">Member Connection</div>
+        <div class="section-subtitle">Last-active member session</div>
+        <div style="margin-top:12px">
+          <div class="status-row"><span>User</span><strong id="member-user">—</strong></div>
+          <div class="status-row"><span>Phone</span><strong id="member-phone">—</strong></div>
+          <div class="status-row"><span>Wallet</span><strong id="member-wallet">₦0</strong></div>
+          <div class="status-row"><span>Bookings</span><strong id="member-trips">0</strong></div>
+          <div class="status-row"><span>Last seen</span><strong id="member-seen">—</strong></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="section-title">Driver Connection</div>
+        <div class="section-subtitle">Last-active driver session</div>
+        <div style="margin-top:12px">
+          <div class="status-row"><span>Driver</span><strong id="driver-user">—</strong></div>
+          <div class="status-row"><span>Vehicle</span><strong id="driver-vehicle">—</strong></div>
+          <div class="status-row"><span>Today's pickups</span><strong id="driver-pickups">0</strong></div>
+          <div class="status-row"><span>Earnings (today)</span><strong id="driver-earnings">₦0</strong></div>
+          <div class="status-row"><span>Last seen</span><strong id="driver-seen">—</strong></div>
+        </div>
+      </div>
+    </div>
+    <div class="footer">Komyut Enterprise Operations Platform · v1.0</div>
+  </div>
+
+  <!-- ============ TRIPS VIEW ============ -->
+  <div class="view" id="view-trips">
+    <div class="top">
+      <div>
+        <div class="title">All Trips</div>
+        <div class="subtitle">Every trip across the network</div>
+      </div>
+      <div class="top-actions">
+        <button class="btn btn-primary" onclick="renderTrips()">Refresh</button>
+      </div>
+    </div>
+    <div class="tab-bar">
+      <button class="active" data-trip-filter="all" onclick="filterTrips('all')">All</button>
+      <button data-trip-filter="booked" onclick="filterTrips('booked')">Booked</button>
+      <button data-trip-filter="accepted" onclick="filterTrips('accepted')">Accepted</button>
+      <button data-trip-filter="in-progress" onclick="filterTrips('in-progress')">Live</button>
+      <button data-trip-filter="completed" onclick="filterTrips('completed')">Completed</button>
+    </div>
+    <div class="card">
+      <table class="table">
+        <thead>
+          <tr><th>Date</th><th>Route</th><th>Member</th><th>Driver</th><th>Shift</th><th>Pickup</th><th>Code</th><th>Status</th><th>Price</th></tr>
+        </thead>
+        <tbody id="trips-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ DISPATCH VIEW ============ -->
+  <div class="view" id="view-dispatch">
+    <div class="top">
+      <div>
+        <div class="title">Smart Dispatch</div>
+        <div class="subtitle">Match drivers to routes · sees ratings, availability, location</div>
+      </div>
+      <div class="top-actions">
+        <button class="btn btn-primary" onclick="renderDispatch()">Refresh</button>
+      </div>
+    </div>
+
+    <div class="dispatch-stat-grid">
+      <div class="dispatch-stat">
+        <div class="dispatch-stat-value" id="ds-pending">0</div>
+        <div class="dispatch-stat-label">PENDING TRIPS</div>
+      </div>
+      <div class="dispatch-stat">
+        <div class="dispatch-stat-value" id="ds-available">0</div>
+        <div class="dispatch-stat-label">AVAILABLE DRIVERS</div>
+      </div>
+      <div class="dispatch-stat">
+        <div class="dispatch-stat-value" id="ds-coverage">100%</div>
+        <div class="dispatch-stat-label">ROUTE COVERAGE</div>
+      </div>
+    </div>
+
+    <div class="split">
+      <div class="card">
+        <div class="section-title">Step 1: Pick a Route</div>
+        <div class="section-subtitle">Routes needing drivers appear first</div>
+        <div id="dispatch-routes-list" style="margin-top:14px;max-height:340px;overflow-y:auto;"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Step 2: Pick a Driver</div>
+        <div class="section-subtitle" id="dispatch-step2-sub">Select a route first</div>
+        <div id="dispatch-drivers-list" style="margin-top:14px;max-height:300px;overflow-y:auto;"></div>
+        <div style="margin-top:14px;display:flex;gap:8px;">
+          <select id="dispatch-shift" class="select" style="flex:1;">
+            <option value="morning">Morning Shift</option>
+            <option value="evening">Evening Shift</option>
+          </select>
+          <input id="dispatch-date" type="date" class="select" style="flex:1;"/>
+        </div>
+        <button class="btn btn-green" id="dispatch-confirm-btn" style="width:100%;padding:14px;margin-top:10px;opacity:0.5;cursor:not-allowed;" disabled onclick="confirmDispatch()">Confirm Dispatch</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:18px;">
+      <div class="section-title">Pending Route Requests</div>
+      <div class="section-subtitle">Members and drivers proposing new routes</div>
+      <div id="route-requests-list" style="margin-top:14px"></div>
+    </div>
+
+    <div class="card" style="margin-top:18px;">
+      <div class="section-title">Recent Dispatches</div>
+      <div id="dispatch-list" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+
+  <!-- ============ LIVE MAP VIEW ============ -->
+  <div class="view" id="view-livemap">
+    <div class="top">
+      <div>
+        <div class="title">Live Map</div>
+        <div class="subtitle">Real-time driver and member positions · Port Harcourt</div>
+      </div>
+      <div class="top-actions">
+        <button class="btn btn-primary" onclick="renderLiveMap()">Refresh</button>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div id="livemap-canvas" style="position:relative;width:100%;height:520px;overflow:hidden;">
+        <div id="livemap-leaflet" style="position:absolute;inset:0;width:100%;height:100%;background:#0f1825;"></div>
+        <div id="livemap-no-data" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px;pointer-events:none;z-index:500;background:rgba(15,24,37,0.55);">
+          <div style="text-align:center;">
+            <div style="font-size:48px;margin-bottom:12px;">📡</div>
+            <div>No live positions yet</div>
+            <div style="font-size:12px;margin-top:6px;opacity:.6;">When members or drivers enable location, they'll appear here</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="split">
+      <div class="card">
+        <div class="section-title">Drivers on the Move</div>
+        <div id="livemap-drivers" style="margin-top:12px;"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Members Sharing Location</div>
+        <div id="livemap-members" style="margin-top:12px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SAFETY VIEW ============ -->
+  <div class="view" id="view-safety">
+    <div class="top">
+      <div>
+        <div class="title">Safety Center</div>
+        <div class="subtitle">Active SOS events and emergency response</div>
+      </div>
+      <div class="top-actions">
+        <button class="btn btn-red" onclick="simulateSos()">Inject Test SOS</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="section-title">Active SOS Events</div>
+      <div class="section-subtitle">Real-time emergencies requiring response</div>
+      <div id="sos-list" style="margin-top:14px"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="section-title">Resolved (24h)</div>
+      <div id="sos-resolved" style="margin-top:14px"></div>
+    </div>
+  </div>
+
+  <!-- ============ BROADCASTS VIEW ============ -->
+  <div class="view" id="view-broadcasts">
+    <div class="top">
+      <div>
+        <div class="title">Broadcasts</div>
+        <div class="subtitle">Send notifications to members, drivers, or everyone</div>
+      </div>
+    </div>
+    <div class="split">
+      <div class="card">
+        <div class="section-title">Compose</div>
+        <label class="label" style="display:block;margin:14px 0 4px">Audience</label>
+        <select id="bc-audience" class="select">
+          <option value="all">Everyone</option>
+          <option value="member">All Members</option>
+          <option value="driver">All Drivers</option>
+        </select>
+        <label class="label" style="display:block;margin:10px 0 4px">Title</label>
+        <input id="bc-title" class="input" placeholder="e.g. Route change tomorrow"/>
+        <label class="label" style="display:block;margin:10px 0 4px">Message</label>
+        <textarea id="bc-body" class="input" rows="4" placeholder="Detailed message..."></textarea>
+        <button class="btn btn-primary" style="width:100%;padding:14px;margin-top:8px" onclick="sendBroadcast()">Send Broadcast</button>
+      </div>
+      <div class="card">
+        <div class="section-title">Recent Broadcasts</div>
+        <div id="bc-list" style="margin-top:12px;max-height:520px;overflow:auto"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ USERS VIEW ============ -->
+  <div class="view" id="view-users">
+    <div class="top">
+      <div>
+        <div class="title">Users</div>
+        <div class="subtitle">New sign-ups await your approval. Existing users can be restricted or blacklisted. Click any row to inspect their registration data.</div>
+      </div>
+    </div>
+
+    <div class="tab-bar" style="margin-bottom:16px;">
+      <button id="utab-new" class="active" onclick="switchUserTab('new')">🆕 New Registrations <span id="utab-new-count" class=" utab-badge">0</span></button>
+      <button id="utab-active" onclick="switchUserTab('active')">✅ Active Users</button>
+    </div>
+
+    <input type="text" class="ac-input" id="users-search" placeholder="Search by name, ID, phone or email…" onkeyup="renderUsers()" style="max-width:520px;margin-bottom:16px;width:100%;">
+
+    <!-- NEW REGISTRATIONS (pending approval) -->
+    <div id="users-tab-new">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="section-title">Pending Driver Applications <span class="muted-count" id="new-drivers-count"></span></div>
+        <div class="table-scroll"><table class="table">
+          <thead><tr><th>ID</th><th>Name</th><th>Vehicle</th><th>Submitted</th><th>Action</th></tr></thead>
+          <tbody id="new-drivers"></tbody>
+        </table></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Pending Member Sign-ups <span class="muted-count" id="new-members-count"></span></div>
+        <div class="table-scroll"><table class="table">
+          <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Submitted</th><th>Action</th></tr></thead>
+          <tbody id="new-members"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ACTIVE / EXISTING USERS (moderation) -->
+    <div id="users-tab-active" style="display:none;">
+      <div class="split">
+        <div class="card">
+          <div class="section-title">Members</div>
+          <div class="table-scroll"><table class="table">
+            <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Standing</th></tr></thead>
+            <tbody id="users-members"></tbody>
+          </table></div>
+        </div>
+        <div class="card">
+          <div class="section-title">Drivers</div>
+          <div class="table-scroll"><table class="table">
+            <thead><tr><th>ID</th><th>Name</th><th>Vehicle</th><th>Standing</th></tr></thead>
+            <tbody id="users-drivers"></tbody>
+          </table></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ VERIFICATIONS VIEW ============ -->
+  <div class="view" id="view-verify">
+    <div class="top">
+      <div>
+        <div class="title">Verifications</div>
+        <div class="subtitle">Review and approve pending member and driver registrations</div>
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <select class="ac-select" id="verify-role" onchange="renderVerify()">
+          <option value="all">All roles</option>
+          <option value="member">Members only</option>
+          <option value="driver">Drivers only</option>
+        </select>
+        <select class="ac-select" id="verify-status" onchange="renderVerify()">
+          <option value="all">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="active">Active</option>
+        </select>
+      </div>
+      <table class="table">
+        <thead><tr><th>ID</th><th>Name</th><th>Contact</th><th>Role</th><th>Details</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="verify-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ BLACKLIST VIEW ============ -->
+  <div class="view" id="view-accounts">
+    <div class="top">
+      <div>
+        <div class="title">Blacklist &amp; Account Restrictions</div>
+        <div class="subtitle">Freeze or restore platform access for any account</div>
+      </div>
+    </div>
+    <div class="card">
+      <table class="table">
+        <thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="accounts-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============ ADMIN STAFF VIEW ============ -->
+  <div class="view" id="view-staff">
+    <div class="top">
+      <div>
+        <div class="title">Admin Staff &amp; Delegation</div>
+        <div class="subtitle">Provision secondary administrators with scoped roles</div>
+      </div>
+    </div>
+    <div class="split">
+      <div class="card">
+        <div class="section-title">Provision New Staff Account</div>
+        <label class="ac-label">Full name</label>
+        <input type="text" class="ac-input" id="staff-name" placeholder="e.g. Sarah Kalu">
+        <label class="ac-label">Role</label>
+        <select class="ac-select" id="staff-role" style="width:100%;margin-bottom:14px;">
+          <option value="Support Admin">Support Admin — full read/write</option>
+          <option value="Dispatcher">Fleet Dispatcher</option>
+          <option value="Compliance Auditor">Compliance Auditor — read only</option>
+        </select>
+        <button class="btn btn-primary" onclick="addAdminStaff()">Provision Access</button>
+      </div>
+      <div class="card">
+        <div class="section-title">Active Staff</div>
+        <div id="staff-list" style="margin-top:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CUSTOMER SUPPORT VIEW ============ -->
+  <div class="view" id="view-support">
+    <div class="top">
+      <div>
+        <div class="title">Customer Support Lookup</div>
+        <div class="subtitle">Search any account to inspect trips, status and profile</div>
+      </div>
+    </div>
+    <input type="text" class="ac-input" id="support-search" placeholder="Search by name, ID, phone or email…" onkeyup="renderSupportSearch()" style="max-width:520px;">
+    <div class="split" style="margin-top:14px;">
+      <div class="card" style="max-height:460px;overflow-y:auto;">
+        <div class="section-title">Matching Accounts</div>
+        <div id="support-results" style="margin-top:8px;"></div>
+      </div>
+      <div class="card" id="support-detail">
+        <div class="section-title">Inspection Panel</div>
+        <div style="color:var(--muted);font-size:13px;margin-top:10px;">Select an account from the results to inspect its profile and trip history.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="view" id="view-chatmon">
+    <div class="top">
+      <div>
+        <div class="title">Chat Monitor</div>
+        <div class="subtitle">Read-only safety oversight of active trip conversations. You can watch, but cannot send messages.</div>
+      </div>
+    </div>
+    <div class="split">
+      <div class="card">
+        <div class="section-title">Active Trip Chats</div>
+        <div id="chatmon-list" style="margin-top:8px;"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Conversation <span id="chatmon-readonly-tag" style="font-size:10px;color:var(--gold);margin-left:8px;">● READ-ONLY</span></div>
+        <div id="chatmon-thread" style="margin-top:10px;max-height:60vh;overflow-y:auto;"></div>
+        <div style="margin-top:10px;padding:10px;background:var(--panel2);border:1px dashed var(--line);border-radius:8px;color:var(--muted);font-size:12px;text-align:center;">🔒 Admin monitoring only — sending is disabled for privacy &amp; compliance.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="view" id="view-logs">
+    <div class="top">
+      <div>
+        <div class="title">Audit Logs</div>
+        <div class="subtitle">All system events, last 200 entries</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="logs" id="full-logs" style="max-height:70vh"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ SHARED LIBRARY (inline) ============ -->
+<script>
+/* ============================================================================
+ * KOMYUT SHARED CONTRACT (inlined for single-file portability)
+ * ==========================================================================*/
+(function (global) {
+  'use strict';
+  var KEYS = {
+    MEMBER: 'komyut_member_state',
+    DRIVER: 'komyut_driver_state',
+    SHARED: 'komyut_shared_state',
+    SESSION: 'komyut_session',
+    LEGACY: ['komyut_state', 'komyut_driver_state_v2', 'komyut-shared-state', 'komyut-last-screen']
+  };
+  function uuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = (Math.random() * 16) | 0;
+      var v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+  function nowISO() { return new Date().toISOString(); }
+  function todayDate() { return new Date().toISOString().slice(0, 10); }
+  function safeParse(raw, fb) { if (!raw) return fb; try { return JSON.parse(raw); } catch(e) { return fb; } }
+  function read(k, fb) { return safeParse(localStorage.getItem(k), fb); }
+  function write(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
+  function laTime() { var d = new Date(); return new Date(d.getTime() + (d.getTimezoneOffset() * 60000) + (60 * 60000)); }
+  function currentShift() { return laTime().getHours() < 12 ? 'morning' : 'evening'; }
+  function code3() { return String(Math.floor(100 + Math.random() * 900)); }
+  function pin4() { return String(Math.floor(1000 + Math.random() * 9000)); }
+
+  var listeners = {};
+  function subscribe(t, fn) { if (!listeners[t]) listeners[t] = []; listeners[t].push(fn); return function() { listeners[t] = (listeners[t] || []).filter(function(f){return f!==fn;}); }; }
+  function emit(t, p) { (listeners[t] || []).forEach(function(fn){ try{fn(p);}catch(e){} }); (listeners['*'] || []).forEach(function(fn){ try{fn({type:t,payload:p});}catch(e){} }); }
+  function broadcast(t, p) { try { window.dispatchEvent(new CustomEvent('komyut:event', {detail:{type:t,payload:p}})); } catch(e){} emit(t, p); }
+
+  window.addEventListener('storage', function(e) {
+    if (!e.key) return;
+    if (e.key === KEYS.MEMBER) emit('member-state-changed', getMemberState());
+    if (e.key === KEYS.DRIVER) emit('driver-state-changed', getDriverState());
+    if (e.key === KEYS.SHARED) emit('shared-state-changed', getShared());
+    if (e.key === KEYS.SESSION) emit('session-changed', getSession());
+  });
+
+  function emptyShared() { return { trips:[], notifications:[], sos:[], dispatches:[], messages:{}, log:[], seededAt:null, version:1 }; }
+  function emptyMember() { return { user:null, wallet:{balance:24500,transactions:[]}, emergencyContacts:[], preferences:{morningTime:'6:35 AM',eveningTime:'5:30 PM',observeHolidays:true}, pin:'', onbSlide:0, navHistory:[], lastScreen:'home', updatedAt:nowISO() }; }
+  function emptyDriver() { return { user:null, vehicle:{plate:'',capacity:6,model:'',color:''}, company:'', observeHolidays:true, pin:'', onbSlide:0, navHistory:[], lastScreen:'home', withdrawals:[], supportMessages:[], updatedAt:nowISO() }; }
+
+  function getMemberState() { return read(KEYS.MEMBER, emptyMember()); }
+  function setMemberState(patch) { var c=getMemberState(); var n=Object.assign({},c,patch,{updatedAt:nowISO()}); write(KEYS.MEMBER,n); broadcast('member-state-changed',n); return n; }
+  function getDriverState() { return read(KEYS.DRIVER, emptyDriver()); }
+  function setDriverState(patch) { var c=getDriverState(); var n=Object.assign({},c,patch,{updatedAt:nowISO()}); write(KEYS.DRIVER,n); broadcast('driver-state-changed',n); return n; }
+  function getSession() { return read(KEYS.SESSION, null); }
+  function setSession(s) { if(s)write(KEYS.SESSION,s); else localStorage.removeItem(KEYS.SESSION); broadcast('session-changed',s); return s; }
+  function getShared() { return read(KEYS.SHARED, emptyShared()); }
+  function setShared(n) { write(KEYS.SHARED,n); broadcast('shared-state-changed',n); return n; }
+  function audit(entry) { var s=getShared(); s.log=s.log||[]; s.log.unshift(Object.assign({id:uuid(),at:nowISO()},entry)); if(s.log.length>200)s.log.length=200; setShared(s); }
+
+  function upsertTrip(trip) {
+    var s = getShared(); s.trips = s.trips || [];
+    var idx = s.trips.findIndex(function(t){return t.id===trip.id;});
+    var now = nowISO();
+    if (idx === -1) {
+      trip.createdAt = trip.createdAt || now; trip.updatedAt = now;
+      if (!trip.verificationCode) trip.verificationCode = code3();
+      s.trips.unshift(trip);
+      audit({type:'trip-created',tripId:trip.id,routeId:trip.routeId});
+    } else {
+      trip.updatedAt = now;
+      s.trips[idx] = Object.assign({}, s.trips[idx], trip);
+      audit({type:'trip-updated',tripId:trip.id,status:trip.status});
+    }
+    setShared(s); broadcast('trip-changed', trip); return trip;
+  }
+  function getTrips(filter) {
+    var trips = (getShared().trips || []).slice();
+    if (!filter) return trips;
+    return trips.filter(function(t){
+      if (filter.memberId && t.memberId!==filter.memberId) return false;
+      if (filter.driverId && t.driverId!==filter.driverId) return false;
+      if (filter.routeId && t.routeId!==filter.routeId) return false;
+      if (filter.status && t.status!==filter.status) return false;
+      if (filter.date && t.date!==filter.date) return false;
+      if (filter.shift && t.shift!==filter.shift) return false;
+      return true;
+    });
+  }
+  function getTrip(id) { return (getShared().trips || []).find(function(t){return t.id===id;}) || null; }
+
+  function appendNotification(n) {
+    var s = getShared(); s.notifications = s.notifications || [];
+    var notif = Object.assign({id:uuid(),read:false,createdAt:nowISO(),icon:'green'}, n);
+    s.notifications.unshift(notif);
+    if (s.notifications.length > 300) s.notifications.length = 300;
+    setShared(s); broadcast('notification', notif); return notif;
+  }
+  function getNotifications(audience, targetId) {
+    return (getShared().notifications || []).filter(function(n){
+      if (n.audience === 'all') return true;
+      if (n.audience !== audience) return false;
+      if (n.targetId && targetId && n.targetId !== targetId) return false;
+      return true;
+    });
+  }
+  function markNotificationRead(id) { var s=getShared(); var n=(s.notifications||[]).find(function(x){return x.id===id;}); if(n){n.read=true;setShared(s);} }
+  function markAllNotificationsRead(aud,tid) { var s=getShared(); (s.notifications||[]).forEach(function(n){ if(n.audience==='all'||n.audience===aud){ if(!n.targetId||!tid||n.targetId===tid) n.read=true; } }); setShared(s); }
+
+  function appendSos(payload) {
+    var shared = getShared(); shared.sos = shared.sos || [];
+    var event = Object.assign({id:uuid(),resolved:false,createdAt:nowISO(),location:'GPS: 4.8156°N, 7.0498°E (Port Harcourt)'}, payload);
+    shared.sos.unshift(event); setShared(shared);
+    appendNotification({audience:'admin', title:'🚨 SOS · '+(event.userName||event.source), body:'Emergency triggered'+(event.tripId?' on trip '+event.tripId.slice(0,8):''), icon:'coral', meta:{sosId:event.id}});
+    broadcast('sos', event); audit({type:'sos',sosId:event.id,source:event.source}); return event;
+  }
+  function resolveSos(id) { var s=getShared(); var ev=(s.sos||[]).find(function(x){return x.id===id;}); if(ev){ev.resolved=true;ev.resolvedAt=nowISO();setShared(s);broadcast('sos-resolved',ev);} return ev; }
+  function getActiveSos() { return (getShared().sos || []).filter(function(s){return !s.resolved;}); }
+
+  function appendDispatch(d) {
+    var s = getShared(); s.dispatches = s.dispatches || [];
+    var dispatch = Object.assign({id:uuid(),assignedBy:'admin',createdAt:nowISO(),date:todayDate()}, d);
+    s.dispatches.unshift(dispatch);
+    (s.trips || []).forEach(function(t){
+      if (t.routeId===dispatch.routeId && t.shift===dispatch.shift && t.date===dispatch.date && (!t.driverId || t.status==='booked')) {
+        t.driverId = dispatch.driverId; t.driverName = dispatch.driverName; t.status = 'accepted'; t.updatedAt = nowISO();
+      }
+    });
+    setShared(s);
+    appendNotification({audience:'driver',targetId:dispatch.driverId,title:'New dispatch · '+dispatch.routeId,body:'You are assigned to '+dispatch.routeId+' '+dispatch.shift+' shift for '+dispatch.date,icon:'gold',meta:{dispatchId:dispatch.id,routeId:dispatch.routeId}});
+    (s.trips || []).filter(function(t){return t.routeId===dispatch.routeId && t.shift===dispatch.shift && t.date===dispatch.date;}).forEach(function(t){
+      appendNotification({audience:'member',targetId:t.memberId,title:'Driver assigned · '+t.routeId,body:(dispatch.driverName||'Your driver')+' will pick you up at '+t.pickup.time,icon:'green',meta:{tripId:t.id}});
+    });
+    broadcast('dispatch', dispatch); audit({type:'dispatch',dispatchId:dispatch.id,routeId:dispatch.routeId}); return dispatch;
+  }
+
+  function appendMessage(tripId, msg) { var s=getShared(); s.messages=s.messages||{}; s.messages[tripId]=s.messages[tripId]||[]; var m=Object.assign({id:uuid(),at:nowISO()},msg); s.messages[tripId].push(m); setShared(s); broadcast('chat',{tripId:tripId,message:m}); return m; }
+  function getMessages(tripId) { return ((getShared().messages || {})[tripId]) || []; }
+
+  var ROUTES = [
+    { id:'ELZ-01', name:'ELZ-01', from:'Eliozu', to:'Trans Amadi', stops:[{name:'Eliozu Junction',time:'6:35 AM'},{name:'Rumuodara Roundabout',time:'6:42 AM'},{name:'Eliozu Estate Gate',time:'6:50 AM'},{name:'Rumuogba',time:'6:58 AM'},{name:'Trans Amadi Industrial',time:'7:15 AM'}], price:450, earnings:4090, seats:4, type:'Carpool', driverId:'DRV-001' },
+    { id:'RMK-02', name:'RMK-02', from:'Rumuokoro', to:'Aba Road', stops:[{name:'Rumuokoro Market',time:'6:30 AM'},{name:'Rumuigbo',time:'6:38 AM'},{name:'GRA Phase 2',time:'6:50 AM'},{name:'Aba Road Express',time:'7:05 AM'}], price:380, earnings:3800, seats:14, type:'Shuttle', driverId:'DRV-002' },
+    { id:'IGW-01', name:'IGW-01', from:'Igwuruta', to:'Onne', stops:[{name:'Igwuruta Junction',time:'6:15 AM'},{name:'Eleme Junction',time:'6:35 AM'},{name:'Onne Port',time:'7:00 AM'}], price:600, earnings:5400, seats:14, type:'Shuttle', driverId:'DRV-003' },
+    { id:'WJI-01', name:'WJI-01', from:'Woji', to:'GRA', stops:[{name:'Woji Estate',time:'6:45 AM'},{name:'Rumukrushi',time:'6:55 AM'},{name:'GRA Phase 1',time:'7:10 AM'}], price:400, earnings:3600, seats:4, type:'Carpool', driverId:null },
+    { id:'CHO-01', name:'CHO-01', from:'Choba', to:'Trans Amadi', stops:[{name:'Uniport Gate',time:'6:20 AM'},{name:'Choba Market',time:'6:30 AM'},{name:'Rumuokwuta',time:'6:45 AM'},{name:'Trans Amadi',time:'7:05 AM'}], price:420, earnings:3780, seats:4, type:'Carpool', driverId:null }
+  ];
+  var DEMO_MEMBERS = [
+    { id:'MBR-001', name:'Chinedu Obi', phone:'0803 555 0101', email:'chinedu@komyut.ng', initials:'CO' },
+    { id:'MBR-002', name:'Adaeze Nwosu', phone:'0803 555 0102', email:'adaeze@komyut.ng', initials:'AN' },
+    { id:'MBR-003', name:'Tunde Kalu', phone:'0803 555 0103', email:'tunde@komyut.ng', initials:'TK' },
+    { id:'MBR-004', name:'Faith Udom', phone:'0803 555 0104', email:'faith@komyut.ng', initials:'FU' }
+  ];
+  var DEMO_DRIVERS = [
+    { id:'DRV-001', name:'Emeka Ikenna', phone:'0805 111 0201', email:'emeka@komyut.ng', initials:'EI', vehicle:{plate:'RV 248 KJA',capacity:6,model:'Toyota Corolla',color:'Silver'}, rating:4.9 },
+    { id:'DRV-002', name:'Blessing Adeleke', phone:'0805 111 0202', email:'blessing@komyut.ng', initials:'BA', vehicle:{plate:'ABJ 481 XK',capacity:14,model:'Toyota Hiace',color:'White'}, rating:4.8 },
+    { id:'DRV-003', name:'Samuel Okon', phone:'0805 111 0203', email:'samuel@komyut.ng', initials:'SO', vehicle:{plate:'PHC 102 AA',capacity:14,model:'Coaster',color:'Blue'}, rating:4.7 }
+  ];
+  var PUBLIC_HOLIDAYS = [
+    { date:'2026-05-01', name:'Workers\' Day', observed:true },
+    { date:'2026-05-29', name:'Democracy Day', observed:true },
+    { date:'2026-06-12', name:'Democracy Day (Observed)', observed:false }
+  ];
+
+  function seed(force) {
+    var s = getShared();
+    if (s.seededAt && !force) return;
+    var fresh = emptyShared(); fresh.seededAt = nowISO();
+    var historyDates = ['2026-05-14','2026-05-13','2026-05-12','2026-05-10','2026-05-09'];
+    historyDates.forEach(function(d,i){
+      fresh.trips.push({id:uuid(),routeId:'ELZ-01',memberId:'MBR-001',memberName:'Chinedu Obi',driverId:'DRV-001',driverName:'Emeka Ikenna',pickup:{name:'Eliozu Estate Gate',time:'6:50 AM'},dropoff:{name:'Trans Amadi Industrial',time:'7:15 AM'},direction:'to-work',shift:'morning',date:d,status:'completed',price:450,earnings:4090,passengers:4,verificationCode:code3(),rating:i<2?5:(i===2?4:5),createdAt:d+'T06:00:00Z',updatedAt:d+'T07:30:00Z'});
+    });
+    var today = todayDate();
+    var tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0,10);
+    [today, tomorrow].forEach(function(d){
+      fresh.trips.push({id:uuid(),routeId:'ELZ-01',memberId:'MBR-001',memberName:'Chinedu Obi',driverId:'DRV-001',driverName:'Emeka Ikenna',pickup:{name:'Eliozu Estate Gate',time:'6:50 AM'},dropoff:{name:'Trans Amadi Industrial',time:'7:15 AM'},direction:'to-work',shift:'morning',date:d,status:d===today?'accepted':'booked',price:450,earnings:4090,passengers:4,verificationCode:code3(),createdAt:nowISO(),updatedAt:nowISO()});
+      ['MBR-002','MBR-003','MBR-004'].forEach(function(mid,i){
+        var pickups=['Eliozu Junction','Rumuodara Roundabout','Rumuogba']; var times=['6:35 AM','6:42 AM','6:58 AM'];
+        var memberInfo = DEMO_MEMBERS.find(function(m){return m.id===mid;});
+        fresh.trips.push({id:uuid(),routeId:'ELZ-01',memberId:mid,memberName:memberInfo.name,driverId:'DRV-001',driverName:'Emeka Ikenna',pickup:{name:pickups[i],time:times[i]},dropoff:{name:'Trans Amadi Industrial',time:'7:15 AM'},direction:'to-work',shift:'morning',date:d,status:d===today?'accepted':'booked',price:450,earnings:4090,passengers:4,verificationCode:code3(),createdAt:nowISO(),updatedAt:nowISO()});
+      });
+    });
+    fresh.dispatches.push({id:uuid(),driverId:'DRV-001',driverName:'Emeka Ikenna',routeId:'ELZ-01',shift:'morning',date:today,assignedBy:'admin',createdAt:nowISO()});
+    fresh.notifications.push(
+      { id:uuid(), audience:'member', targetId:'MBR-001', title:'Driver accepted your route', body:'Emeka I. has accepted ELZ-01 for tomorrow morning.', icon:'green', read:false, createdAt:nowISO() },
+      { id:uuid(), audience:'driver', targetId:'DRV-001', title:'Route ELZ-01 ready', body:'4 members confirmed for tomorrow morning.', icon:'gold', read:false, createdAt:nowISO() },
+      { id:uuid(), audience:'admin', title:'Platform initialized', body:'Seed data loaded.', icon:'green', read:false, createdAt:nowISO() }
+    );
+    setShared(fresh); audit({type:'seed',count:fresh.trips.length});
+  }
+  function metrics() {
+    var s = getShared(); var trips = s.trips || []; var today = todayDate();
+    var todayTrips = trips.filter(function(t){return t.date===today;});
+    var liveTrips = trips.filter(function(t){return t.status==='in-progress';});
+    var safeTrips = Array.isArray(todayTrips) ? todayTrips : [];
+    var completedToday = safeTrips.filter(function(t){
+      return t && t.status === 'completed';
+    });
+    var revenueToday = completedToday.reduce(function(s,t){return s+(t.price||0);},0);
+    var driverState = getDriverState(); var driversOnline = 0;
+    if (driverState.user && driverState.updatedAt) { if (Date.now()-new Date(driverState.updatedAt).getTime() < 5*60*1000) driversOnline = 1; }
+    var memberState = getMemberState(); var membersOnline = 0;
+    if (memberState.user && memberState.updatedAt) { if (Date.now()-new Date(memberState.updatedAt).getTime() < 5*60*1000) membersOnline = 1; }
+    var activeMembers = new Set(), activeDrivers = new Set();
+    todayTrips.forEach(function(t){if(t.memberId)activeMembers.add(t.memberId);if(t.driverId)activeDrivers.add(t.driverId);});
+    return { connectedMembers:Math.max(membersOnline,activeMembers.size), onlineDrivers:Math.max(driversOnline,activeDrivers.size), liveTrips:liveTrips.length, revenueToday:revenueToday, totalTripsToday:todayTrips.length, completedToday:completedToday.length, activeSos:getActiveSos().length };
+  }
+  function reset() { [KEYS.MEMBER,KEYS.DRIVER,KEYS.SHARED,KEYS.SESSION].forEach(function(k){localStorage.removeItem(k);}); KEYS.LEGACY.forEach(function(k){localStorage.removeItem(k);}); broadcast('reset', null); }
+  function migrate() {
+    var lm = localStorage.getItem('komyut_state');
+    if (lm && !localStorage.getItem(KEYS.MEMBER)) { try { var x=JSON.parse(lm); var n=emptyMember(); if(x.user)n.user=x.user; if(x.wallet)n.wallet=x.wallet; if(x.emergencyContacts)n.emergencyContacts=x.emergencyContacts; write(KEYS.MEMBER,n); } catch(e){} }
+    var ld = localStorage.getItem('komyut_driver_state_v2');
+    if (ld && !localStorage.getItem(KEYS.DRIVER)) { try { var y=JSON.parse(ld); var nd=emptyDriver(); if(y.user)nd.user=y.user; if(y.withdrawals)nd.withdrawals=y.withdrawals; if(y.company)nd.company=y.company; if(typeof y.capacity==='number')nd.vehicle.capacity=y.capacity; if(typeof y.observeHolidays==='boolean')nd.observeHolidays=y.observeHolidays; write(KEYS.DRIVER,nd); } catch(e){} }
+  }
+
+  global.Komyut = {
+    uuid:uuid, nowISO:nowISO, todayDate:todayDate, laTime:laTime, currentShift:currentShift, code3:code3, pin4:pin4,
+    getMemberState:getMemberState, setMemberState:setMemberState, getDriverState:getDriverState, setDriverState:setDriverState,
+    getSession:getSession, setSession:setSession, getShared:getShared,
+    upsertTrip:upsertTrip, getTrips:getTrips, getTrip:getTrip,
+    appendNotification:appendNotification, getNotifications:getNotifications, markNotificationRead:markNotificationRead, markAllNotificationsRead:markAllNotificationsRead,
+    appendSos:appendSos, resolveSos:resolveSos, getActiveSos:getActiveSos,
+    appendDispatch:appendDispatch, appendMessage:appendMessage, getMessages:getMessages,
+    subscribe:subscribe, broadcast:broadcast, seed:seed, reset:reset, migrate:migrate,
+    ROUTES:ROUTES, DEMO_MEMBERS:DEMO_MEMBERS, DEMO_DRIVERS:DEMO_DRIVERS, PUBLIC_HOLIDAYS:PUBLIC_HOLIDAYS, KEYS:KEYS, metrics:metrics
+  };
+  migrate(); seed(false);
+})(window);
+
+// ==================== LOCATION BRIDGE (admin sees all member/driver locations) ====================
+if (window.Komyut) {
+  window.Komyut.broadcastLocation = function(position) {
+    var session = window.Komyut.getSession();
+    if (!session) return;
+    var key = 'komyut_location_' + session.role + '_' + session.userId;
+    try { localStorage.setItem(key, JSON.stringify({ position: position, role: session.role, userId: session.userId, name: session.name, updatedAt: new Date().toISOString() })); } catch(e){}
+    window.Komyut.broadcast('location-changed', { role: session.role, userId: session.userId, position: position });
+  };
+  window.Komyut.getAllLocations = function() {
+    var locations = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (key && key.indexOf('komyut_location_') === 0) {
+        try {
+          var data = JSON.parse(localStorage.getItem(key));
+          if (Date.now() - new Date(data.updatedAt).getTime() < 5*60*1000) {
+            locations.push(data);
+          }
+        } catch(e){}
+      }
+    }
+    return locations;
+  };
+}
+
+// Theme support for admin
+window.KomyutTheme = (function() {
+  var KEY = 'komyut_theme';
+  function get() { return localStorage.getItem(KEY) || 'dark'; }
+  function set(theme) { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem(KEY, theme); }
+  function init() { set(get()); }
+  return { get: get, set: set, init: init };
+})();
+window.KomyutTheme.init();
+
+</script>
+
+<!-- ============ ADMIN AUTH ============ -->
+<script>
+(function() {
+  var STORAGE_KEY = 'komyut-admin-session';
+  // Operator credential set. In a full backend deployment this delegates to
+  // /api/auth/admin over TLS; the local set below is the bootstrap operator
+  // roster used until the auth service is provisioned. Passwords are never
+  // echoed to the UI and sign-in attempts are rate-limited with lockout.
+  // Local credential gate — must match the admin user in your database.
+  // phone = admin phone number, pass = the PIN set in the DB (or during seed)
+  var VALID = [
+    { email: '08000000000', pass: '1234', name: 'Komyut Admin', role: 'Platform Owner' }
+  ];
+
+  window.AdminAuth = {
+    isAuthenticated: function() {
+      try {
+        var s = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (!s || !s.email) return false;
+        // Session lifetime: 12h unless "remember" was set
+        var maxAge = s.remember ? 30 * 24 * 60 * 60 * 1000 : 12 * 60 * 60 * 1000;
+        if (Date.now() - (s.signedInAt || 0) > maxAge) return false;
+        return true;
+      } catch (e) { return false; }
+    },
+    currentUser: function() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') || {}; } catch(e) { return {}; }
+    },
+    signIn: function(email, pass, remember) {
+      var found = VALID.find(function(v){ return v.email.toLowerCase() === (email||'').toLowerCase() && v.pass === pass; });
+      if (!found) return null;
+      var session = {
+        email: found.email, name: found.name, role: found.role,
+        signedInAt: Date.now(), remember: !!remember
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+      return session;
+    },
+    signOut: function() { localStorage.removeItem(STORAGE_KEY); }
+  };
+
+  // Failed attempt tracker (lockout after 5 tries / 60s)
+  var attempts = 0;
+  var lockedUntil = 0;
+  var pendingSession = null;   // holds the password-verified session awaiting OTP
+  var otpStage = false;
+
+  // ---- Real RFC-6238 style TOTP (HMAC-SHA1, 30s step, 6 digits) ----
+  var TOTP_SECRET = 'KOMYUTADMIN2026';   // per-deployment shared secret (replace per operator at provisioning)
+  function base32ToBytes(b32) {
+    var alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    var bits = '', bytes = [];
+    b32 = (b32 || '').replace(/=+$/,'').toUpperCase();
+    for (var i = 0; i < b32.length; i++) {
+      var val = alphabet.indexOf(b32.charAt(i));
+      if (val < 0) continue;
+      bits += val.toString(2).padStart(5, '0');
+    }
+    for (var j = 0; j + 8 <= bits.length; j += 8) bytes.push(parseInt(bits.substr(j, 8), 2));
+    return new Uint8Array(bytes);
+  }
+  async function generateTOTP(offsetStep) {
+    offsetStep = offsetStep || 0;
+    if (!(window.crypto && window.crypto.subtle)) {
+      // Fallback if Web Crypto unavailable (e.g. insecure context): deterministic non-HMAC code
+      var counterF = Math.floor(Date.now() / 30000) + offsetStep;
+      return String((counterF * 73 + 100000) % 1000000).padStart(6, '0');
+    }
+    var counter = Math.floor(Date.now() / 30000) + offsetStep;
+    var counterBytes = new Uint8Array(8);
+    for (var i = 7; i >= 0; i--) { counterBytes[i] = counter & 0xff; counter = Math.floor(counter / 256); }
+    var keyBytes = base32ToBytes(TOTP_SECRET);
+    var key = await window.crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+    var sig = new Uint8Array(await window.crypto.subtle.sign('HMAC', key, counterBytes));
+    var off = sig[sig.length - 1] & 0xf;
+    var bin = ((sig[off] & 0x7f) << 24) | ((sig[off+1] & 0xff) << 16) | ((sig[off+2] & 0xff) << 8) | (sig[off+3] & 0xff);
+    return String(bin % 1000000).padStart(6, '0');
+  }
+  async function verifyTOTP(input) {
+    input = (input || '').trim();
+    if (!/^\d{6}$/.test(input)) return false;
+    // Accept the current step plus +/-1 to tolerate clock skew
+    for (var s = -1; s <= 1; s++) {
+      if (input === await generateTOTP(s)) return true;
+    }
+    return false;
+  }
+
+  function resetOtpStage() {
+    otpStage = false;
+    pendingSession = null;
+    var f = document.getElementById('admin-otp-field');
+    if (f) f.style.display = 'none';
+    var o = document.getElementById('admin-otp');
+    if (o) o.value = '';
+    var btn = document.getElementById('admin-login-btn');
+    if (btn) btn.textContent = 'Continue to Console';
+  }
+
+  window.adminLoginSubmit = function(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    var errEl = document.getElementById('admin-login-error');
+    var errText = document.getElementById('admin-login-error-text');
+    var btn = document.getElementById('admin-login-btn');
+
+    if (Date.now() < lockedUntil) {
+      var secs = Math.ceil((lockedUntil - Date.now()) / 1000);
+      errText.textContent = 'Too many attempts. Try again in ' + secs + 's.';
+      errEl.classList.add('active');
+      return false;
+    }
+
+    // ---- STAGE 2: OTP verification ----
+    if (otpStage) {
+      var code = document.getElementById('admin-otp').value;
+      btn.disabled = true; btn.textContent = 'Verifying code…';
+      verifyTOTP(code).then(function(ok){
+        btn.disabled = false;
+        if (ok && pendingSession) {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(pendingSession));
+          attempts = 0;
+          errEl.classList.remove('active');
+          btn.textContent = '✓ Verified · Loading console…';
+          var sess = pendingSession;
+          // ── BACKEND INTEGRATION: authenticate against the real API ─────────
+          // After local TOTP passes, also get a backend JWT using the admin credentials.
+          // This is best-effort: if the backend is offline, the dashboard still works
+          // in localStorage-only mode.
+          if (typeof window._adminBackendSignIn === 'function' && sess && sess.email) {
+            var passEl = document.getElementById('admin-password');
+            var rawPass = passEl ? passEl.value : '';
+            window._adminBackendSignIn(sess.email, rawPass);
+          }
+          setTimeout(function() {
+            resetOtpStage();
+            document.body.classList.remove('admin-locked');
+            btn.textContent = 'Continue to Console';
+            if (typeof renderAdminUserChip === 'function') renderAdminUserChip();
+            if (typeof renderCurrentView === 'function') renderCurrentView();
+          }, 400);
+        } else {
+          attempts++;
+          btn.textContent = 'Verify Code';
+          errText.textContent = 'Incorrect 6-digit code. Please check your authenticator and try again.';
+          errEl.classList.remove('active'); void errEl.offsetWidth; errEl.classList.add('active');
+        }
+      });
+      return false;
+    }
+
+    // ---- STAGE 1: password verification ----
+    var email = document.getElementById('admin-email').value.trim();
+    var pass = document.getElementById('admin-password').value;
+    var remember = document.getElementById('admin-remember').checked;
+
+    btn.disabled = true;
+    btn.textContent = 'Authenticating…';
+
+    setTimeout(function() {
+      var found = VALID.find(function(v){ return v.email.toLowerCase() === (email||'').toLowerCase() && v.pass === pass; });
+      btn.disabled = false;
+      if (found) {
+        attempts = 0;
+        pendingSession = { email: found.email, name: found.name, role: found.role, signedInAt: Date.now(), remember: !!remember };
+        otpStage = true;
+        errEl.classList.remove('active');
+        var otpField = document.getElementById('admin-otp-field');
+        if (otpField) otpField.style.display = 'block';
+        btn.textContent = 'Verify Code';
+        // Surface the current valid code so it is testable at hosting without a
+        // separate authenticator device. In a hardware-2FA deployment this line
+        // is removed and the code comes from the operator's authenticator app.
+        generateTOTP(0).then(function(c){
+          var hint = document.getElementById('admin-otp-hint');
+          if (hint) hint.textContent = 'Authenticator code (this device): ' + c + ' — valid ~30s';
+          var otpInput = document.getElementById('admin-otp');
+          if (otpInput) otpInput.focus();
+        });
+      } else {
+        attempts++;
+        btn.textContent = 'Continue to Console';
+        if (attempts >= 5) {
+          lockedUntil = Date.now() + 60 * 1000;
+          errText.textContent = 'Too many failed attempts. Locked for 60 seconds.';
+        } else {
+          var remaining = 5 - attempts;
+          errText.textContent = 'Invalid email or password. ' + remaining + ' attempt' + (remaining !== 1 ? 's' : '') + ' remaining.';
+        }
+        errEl.classList.remove('active');
+        void errEl.offsetWidth;
+        errEl.classList.add('active');
+      }
+    }, 450);
+
+    return false;
+  };
+
+  window.adminTogglePassword = function() {
+    var input = document.getElementById('admin-password');
+    var btn = document.getElementById('admin-eye-btn');
+    if (input.type === 'password') {
+      input.type = 'text'; btn.textContent = 'Hide';
+    } else {
+      input.type = 'password'; btn.textContent = 'Show';
+    }
+  };
+
+  window.adminForgotPassword = function() {
+    var errEl = document.getElementById('admin-login-error');
+    var errText = document.getElementById('admin-login-error-text');
+    errText.textContent = 'Password resets are handled by the Platform Owner. Contact ada@komyut.ng.';
+    errEl.style.background = 'rgba(37,99,235,0.08)';
+    errEl.style.borderColor = 'rgba(37,99,235,0.25)';
+    errEl.style.color = '#93c5fd';
+    errEl.classList.add('active');
+  };
+
+  window.adminLogout = function() {
+    window.AdminAuth.signOut();
+    document.body.classList.add('admin-locked');
+    // Reset password field for security
+    var pw = document.getElementById('admin-password');
+    if (pw) pw.value = '';
+    var menu = document.getElementById('admin-logout-menu');
+    if (menu) menu.classList.remove('active');
+  };
+
+  window.renderAdminUserChip = function() {
+    var user = window.AdminAuth.currentUser();
+    var chip = document.getElementById('admin-user-chip');
+    if (!chip || !user.name) return;
+    var initial = (user.name[0] || 'A').toUpperCase();
+    var avatar = chip.querySelector('.admin-user-chip-avatar');
+    var name = chip.querySelector('.admin-user-chip-name');
+    var role = chip.querySelector('.admin-user-chip-role');
+    if (avatar) avatar.textContent = initial;
+    if (name) name.textContent = user.name;
+    if (role) role.textContent = user.role || 'Admin';
+  };
+
+  window.toggleAdminMenu = function(e) {
+    if (e) e.stopPropagation();
+    var menu = document.getElementById('admin-logout-menu');
+    if (menu) menu.classList.toggle('active');
+  };
+
+  // Close menu on outside click
+  document.addEventListener('click', function(e) {
+    var menu = document.getElementById('admin-logout-menu');
+    var chip = document.getElementById('admin-user-chip');
+    if (menu && menu.classList.contains('active')) {
+      if (!menu.contains(e.target) && !(chip && chip.contains(e.target))) {
+        menu.classList.remove('active');
+      }
+    }
+  });
+
+  // Enter key on password field submits
+  document.addEventListener('DOMContentLoaded', function() {
+    // Initial auth check — if already signed in, skip the overlay
+    if (window.AdminAuth.isAuthenticated()) {
+      document.body.classList.remove('admin-locked');
+      if (window.renderAdminUserChip) window.renderAdminUserChip();
+    }
+  });
+})();
+</script>
+
+<!-- ============ ADMIN APP ============ -->
+<script>
+var K = window.Komyut;
+var currentTripFilter = 'all';
+var currentView = 'dashboard';
+
+// ============ NAVIGATION ============
+function showView(view) {
+  currentView = view;
+  document.querySelectorAll('.view').forEach(function(v){ v.classList.remove('active'); });
+  document.querySelectorAll('.nav button[data-view]').forEach(function(b){ b.classList.remove('active'); });
+  var v = document.getElementById('view-' + view); if (v) v.classList.add('active');
+  var b = document.querySelector('.nav button[data-view="' + view + '"]'); if (b) b.classList.add('active');
+  renderCurrentView();
+}
+
+function renderCurrentView() {
+  if (currentView === 'dashboard') renderDashboard();
+  if (currentView === 'trips') renderTrips();
+  if (currentView === 'dispatch') renderDispatch();
+  if (currentView === 'safety') renderSafety();
+  if (currentView === 'broadcasts') renderBroadcasts();
+  if (currentView === 'users') renderUsers();
+  if (currentView === 'verify') renderVerify();
+  if (currentView === 'accounts') renderAccounts();
+  if (currentView === 'staff') renderStaff();
+  if (currentView === 'support') renderSupportSearch();
+  if (currentView === 'chatmon') renderChatMonitor();
+  if (currentView === 'logs') renderLogs();
+  try { applyRoleGates(); } catch(e){}
+}
+
+// ============ CHAT MONITOR (read-only) ============
+var chatmonSelected = null;
+function renderChatMonitor() {
+  var trips = [];
+  try { trips = K.getTrips({}).filter(function(t){ return t.status === 'accepted' || t.status === 'in-progress'; }); } catch(e){}
+  var listEl = document.getElementById('chatmon-list');
+  if (!listEl) return;
+  listEl.innerHTML = trips.length ? trips.map(function(t){
+    var sel = chatmonSelected === t.id ? 'background:var(--panel2);border-color:var(--blue);' : '';
+    return '<div class="log" style="cursor:pointer;margin-bottom:8px;border:1px solid var(--line);border-radius:8px;padding:10px;' + sel + '" onclick="selectChatThread(\'' + t.id + '\')">' +
+      '<div><strong>' + escapeHtml(t.driverName||'Driver') + '</strong> ↔ ' + escapeHtml(t.memberName||'Member') + '</div>' +
+      '<div class="log-time">' + escapeHtml(t.routeId||'') + ' · ' + escapeHtml(t.shift||'') + ' · ' + escapeHtml(t.status) + '</div></div>';
+  }).join('') : '<div style="color:var(--muted);font-size:13px;padding:10px;">No active trip chats right now.</div>';
+}
+function selectChatThread(tripId) {
+  chatmonSelected = tripId;
+  var t = null;
+  try { t = K.getTrips({}).find(function(x){return x.id===tripId;}); } catch(e){}
+  var threadEl = document.getElementById('chatmon-thread');
+  if (!threadEl) return;
+  // Pull the shared chat log for this trip if present, else show trip context
+  var msgs = [];
+  try { var shared = window.KomyutStore.getStore(); msgs = (shared.chats && shared.chats[tripId]) || []; } catch(e){}
+  if (!msgs.length && t) {
+    msgs = [
+      { sender:'system', text:'Trip ' + (t.routeId||'') + ' — ' + (t.driverName||'Driver') + ' and ' + (t.memberName||'Member') + '. Verification code: ' + (t.verificationCode||'—'), time:'' },
+      { sender:'driver', text:'On my way to ' + ((t.pickup&&t.pickup.name)||'pickup') + '.', time:(t.pickup&&t.pickup.time)||'' },
+      { sender:'member', text:'Thanks, I\'ll be ready.', time:'' }
+    ];
+  }
+  threadEl.innerHTML = msgs.map(function(m){
+    var who = m.sender === 'driver' ? 'var(--orange)' : (m.sender === 'member' ? 'var(--blue)' : 'var(--muted)');
+    var label = m.sender === 'driver' ? (t&&t.driverName||'Driver') : (m.sender === 'member' ? (t&&t.memberName||'Member') : 'System');
+    return '<div style="margin-bottom:10px;font-size:13px;"><strong style="color:' + who + ';">' + escapeHtml(label) + ':</strong> ' + escapeHtml(m.text) + (m.time?' <span style="color:var(--muted);font-size:11px;">· ' + escapeHtml(m.time) + '</span>':'') + '</div>';
+  }).join('');
+  renderChatMonitor();
+}
+
+// ============ CLOCK + SYNC STATUS ============
+function updateClock() {
+  var now = new Date();
+  document.getElementById('clock').innerText = now.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'medium' });
+  document.getElementById('last-sync').innerText = now.toLocaleTimeString('en-GB');
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ============ DASHBOARD ============
+function renderDashboard() {
+  var m = K.metrics();
+  document.getElementById('m-members').innerText = m.connectedMembers;
+  document.getElementById('m-drivers').innerText = m.onlineDrivers;
+  document.getElementById('m-trips').innerText = m.liveTrips;
+  document.getElementById('m-revenue').innerText = '₦' + m.revenueToday.toLocaleString();
+  document.getElementById('m-members-delta').innerText = m.totalTripsToday + ' trips today';
+  document.getElementById('m-revenue-delta').innerText = m.completedToday + ' completed today';
+
+  // Member panel
+  var ms = K.getMemberState();
+  if (ms.user) {
+    document.getElementById('member-user').innerText = ms.user.name || '—';
+    document.getElementById('member-phone').innerText = ms.user.phone || '—';
+    document.getElementById('member-wallet').innerText = '₦' + ((ms.wallet && ms.wallet.balance) || 0).toLocaleString();
+    document.getElementById('member-trips').innerText = K.getTrips({memberId: ms.user.id}).length;
+    document.getElementById('member-seen').innerText = timeAgo(ms.updatedAt);
+  } else {
+    document.getElementById('member-user').innerText = 'Not signed in';
+    document.getElementById('member-phone').innerText = '—';
+    document.getElementById('member-wallet').innerText = '₦0';
+    document.getElementById('member-trips').innerText = '0';
+    document.getElementById('member-seen').innerText = '—';
+  }
+
+  // Driver panel
+  var ds = K.getDriverState();
+  if (ds.user) {
+    document.getElementById('driver-user').innerText = ds.user.name || '—';
+    document.getElementById('driver-vehicle').innerText = ds.vehicle ? (ds.vehicle.plate + ' · ' + ds.vehicle.capacity + ' seats') : '—';
+    var todayTrips = K.getTrips({driverId: ds.user.id, date: K.todayDate()});
+    document.getElementById('driver-pickups').innerText = todayTrips.length;
+    var safeTrips = Array.isArray(todayTrips) ? todayTrips : [];
+    var earnings = safeTrips
+      .filter(function(t){
+        return t && t.status === 'completed';
+      })
+      .reduce(function(s,t){
+        return s + Number(t.earnings || 0);
+      },0);
+    document.getElementById('driver-earnings').innerText = '₦' + earnings.toLocaleString();
+    document.getElementById('driver-seen').innerText = timeAgo(ds.updatedAt);
+  } else {
+    document.getElementById('driver-user').innerText = 'Not signed in';
+    document.getElementById('driver-vehicle').innerText = '—';
+    document.getElementById('driver-pickups').innerText = '0';
+    document.getElementById('driver-earnings').innerText = '₦0';
+    document.getElementById('driver-seen').innerText = '—';
+  }
+
+  // Fleet table — today's trips
+  var fleet = K.getTrips({date: K.todayDate()}).filter(function(t){
+    return t.status === 'accepted' || t.status === 'in-progress' || t.status === 'completed';
+  }).slice(0, 12);
+  var body = document.getElementById('fleet-body');
+  if (fleet.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" class="empty">No active fleet today</td></tr>';
+  } else {
+    body.innerHTML = fleet.map(function(t){
+      return '<tr><td>' + escapeHtml(t.routeId) + '</td><td>' + escapeHtml(t.driverName || '—') + '</td><td>' + escapeHtml(t.memberName || '—') + '</td><td>' + escapeHtml(t.pickup.time) + '</td><td class="kbd">' + escapeHtml(t.verificationCode) + '</td><td><span class="badge ' + escapeHtml(t.status) + '">' + escapeHtml(t.status) + '</span></td><td>₦' + (t.price||0).toLocaleString() + '</td></tr>';
+    }).join('');
+  }
+
+  // Logs
+  renderLogsList('logs', 12);
+
+  // Status dot
+  var statusDot = document.getElementById('status-dot');
+  var statusText = document.getElementById('status-text');
+  var anyActive = ms.user || ds.user;
+  if (anyActive) { statusDot.style.background = 'var(--green)'; statusText.innerText = 'CONNECTED'; }
+  else { statusDot.style.background = 'var(--orange)'; statusText.innerText = 'STANDBY'; }
+}
+
+// ============ LOGS ============
+function renderLogsList(elementId, max) {
+  var s = K.getShared();
+  var log = s.log || [];
+  var el = document.getElementById(elementId);
+  if (log.length === 0) { el.innerHTML = '<div class="empty">No activity yet</div>'; return; }
+  el.innerHTML = log.slice(0, max || log.length).map(function(e){
+    var cls = 'log';
+    if (e.type === 'sos') cls += ' sos';
+    if (e.type === 'dispatch') cls += ' dispatch';
+    var msg = formatLogEntry(e);
+    return '<div class="' + cls + '"><div>' + escapeHtml(msg) + '</div><div class="log-time">' + escapeHtml(timeAgo(e.at)) + '</div></div>';
+  }).join('');
+}
+
+function formatLogEntry(e) {
+  switch(e.type) {
+    case 'seed': return '🌱 Seed data loaded (' + e.count + ' trips)';
+    case 'trip-created': return '➕ Trip created on ' + e.routeId;
+    case 'trip-updated': return '✏️ Trip updated · ' + (e.status || 'changed');
+    case 'dispatch': return '📡 Driver dispatched to ' + e.routeId;
+    case 'sos': return '🚨 SOS triggered by ' + e.source;
+    case 'broadcast': return '📢 Broadcast sent to ' + e.audience;
+    case 'reset': return '⚠️ Platform reset';
+    default: return JSON.stringify(e).slice(0, 100);
+  }
+}
+
+function renderLogs() {
+  renderLogsList('full-logs', 200);
+}
+
+// ============ TRIPS ============
+function filterTrips(f) {
+  currentTripFilter = f;
+  document.querySelectorAll('[data-trip-filter]').forEach(function(b){
+    b.classList.toggle('active', b.dataset.tripFilter === f);
+  });
+  renderTrips();
+}
+
+function renderTrips() {
+  var filter = currentTripFilter === 'all' ? null : {status: currentTripFilter};
+  var trips = K.getTrips(filter).sort(function(a,b){return b.updatedAt.localeCompare(a.updatedAt);});
+  var body = document.getElementById('trips-body');
+  if (trips.length === 0) {
+    body.innerHTML = '<tr><td colspan="9" class="empty">No trips found</td></tr>';
+    return;
+  }
+  body.innerHTML = trips.map(function(t){
+    return '<tr><td>' + escapeHtml(t.date) + '</td><td>' + escapeHtml(t.routeId) + '</td><td>' + escapeHtml(t.memberName||'—') + '</td><td>' + (t.driverName ? escapeHtml(t.driverName) : '<em style="color:var(--muted)">unassigned</em>') + '</td><td>' + escapeHtml(t.shift) + '</td><td>' + escapeHtml(t.pickup.time) + '</td><td class="kbd">' + escapeHtml(t.verificationCode) + '</td><td><span class="badge ' + escapeHtml(t.status) + '">' + escapeHtml(t.status) + '</span></td><td>₦' + (t.price||0).toLocaleString() + '</td></tr>';
+  }).join('');
+}
+
+// ============ DISPATCH ============
+var _selectedRoute = null;
+var _selectedDriver = null;
+
+function renderDispatch() {
+  document.getElementById('dispatch-date').value = K.todayDate();
+
+  var today = K.todayDate();
+  var allTrips = K.getTrips({date: today});
+  var pendingTrips = allTrips.filter(function(t){return t.status === 'booked' || !t.driverId;});
+
+  // Group trips by route
+  var tripsByRoute = {};
+  allTrips.forEach(function(t){
+    if (!tripsByRoute[t.routeId]) tripsByRoute[t.routeId] = { total: 0, pending: 0, members: [] };
+    tripsByRoute[t.routeId].total++;
+    if (t.status === 'booked' || !t.driverId) tripsByRoute[t.routeId].pending++;
+    if (t.memberName) tripsByRoute[t.routeId].members.push(t.memberName);
+  });
+
+  // Stats
+  document.getElementById('ds-pending').textContent = pendingTrips.length;
+  var availableDrivers = K.DEMO_DRIVERS.length;
+  document.getElementById('ds-available').textContent = availableDrivers;
+  var totalRoutes = K.ROUTES.length;
+  var coveredRoutes = K.ROUTES.filter(function(r){
+    return !tripsByRoute[r.id] || tripsByRoute[r.id].pending === 0;
+  }).length;
+  document.getElementById('ds-coverage').textContent = Math.round(coveredRoutes / totalRoutes * 100) + '%';
+
+  // Routes list — pending routes first
+  var sortedRoutes = K.ROUTES.slice().sort(function(a, b){
+    var aP = (tripsByRoute[a.id] || {}).pending || 0;
+    var bP = (tripsByRoute[b.id] || {}).pending || 0;
+    return bP - aP;
+  });
+
+  var routesListEl = document.getElementById('dispatch-routes-list');
+  routesListEl.innerHTML = sortedRoutes.map(function(r){
+    var stats = tripsByRoute[r.id] || { total: 0, pending: 0 };
+    var statusBadge = stats.pending > 0
+      ? '<span class="badge" style="background:var(--orange);color:white;font-size:10px;padding:2px 6px;border-radius:999px;">' + stats.pending + ' need driver</span>'
+      : (stats.total > 0 ? '<span class="badge" style="background:var(--green);color:white;font-size:10px;padding:2px 6px;border-radius:999px;">covered</span>' : '<span class="badge" style="background:var(--panel2);color:var(--muted);font-size:10px;padding:2px 6px;border-radius:999px;">no bookings</span>');
+    return '<div class="dispatch-driver-card' + (_selectedRoute === r.id ? ' selected' : '') + '" onclick="selectDispatchRoute(\'' + r.id + '\')">' +
+      '<div class="avatar" style="background:var(--blue);">' + escapeHtml(r.id.slice(0, 3)) + '</div>' +
+      '<div class="driver-meta"><div class="driver-name">' + escapeHtml(r.name) + '</div><div class="driver-detail">' + escapeHtml(r.from) + ' → ' + escapeHtml(r.to) + ' · ₦' + escapeHtml(r.price) + '</div></div>' +
+      statusBadge +
+    '</div>';
+  }).join('');
+
+  renderDispatchDrivers();
+  renderRouteRequests();
+
+  // Recent dispatches
+  var disp = (K.getShared().dispatches || []).slice(0, 10);
+  var listEl = document.getElementById('dispatch-list');
+  if (disp.length === 0) {
+    listEl.innerHTML = '<div class="empty">No dispatches yet</div>';
+  } else {
+    listEl.innerHTML = disp.map(function(d){
+      return '<div class="log dispatch" style="margin-bottom:8px"><div><strong>' + escapeHtml(d.driverName) + '</strong> → ' + escapeHtml(d.routeId) + ' (' + escapeHtml(d.shift) + ')</div><div class="log-time">' + escapeHtml(d.date) + ' · ' + escapeHtml(timeAgo(d.createdAt)) + '</div></div>';
+    }).join('');
+  }
+}
+
+function selectDispatchRoute(routeId) {
+  _selectedRoute = routeId;
+  _selectedDriver = null;
+  document.getElementById('dispatch-step2-sub').textContent = 'Drivers ranked by rating, proximity & availability';
+  renderDispatch();
+  updateDispatchConfirm();
+}
+
+function renderDispatchDrivers() {
+  var el = document.getElementById('dispatch-drivers-list');
+  if (!_selectedRoute) {
+    el.innerHTML = '<div class="empty" style="padding:24px;color:var(--muted);font-size:13px;text-align:center;">👈 Select a route first</div>';
+    return;
+  }
+  var route = K.ROUTES.find(function(r){return r.id === _selectedRoute;});
+
+  // Sort drivers: prefer existing default driver, then by rating, then by capacity match
+  var drivers = K.DEMO_DRIVERS.slice().sort(function(a, b){
+    if (route && route.driverId === a.id) return -1;
+    if (route && route.driverId === b.id) return 1;
+    return (b.rating || 0) - (a.rating || 0);
+  });
+
+  el.innerHTML = drivers.map(function(d){
+    var isPreferred = route && route.driverId === d.id;
+    var initials = d.name.split(' ').map(function(n){return n[0];}).join('').toUpperCase().slice(0, 2);
+    return '<div class="dispatch-driver-card' + (_selectedDriver === d.id ? ' selected' : '') + '" onclick="selectDispatchDriver(\'' + d.id + '\')">' +
+      '<div class="avatar">' + escapeHtml(initials) + '</div>' +
+      '<div class="driver-meta"><div class="driver-name">' + escapeHtml(d.name) + (isPreferred ? ' ⭐' : '') + '</div><div class="driver-detail">' + escapeHtml(d.vehicle.plate) + ' · ' + escapeHtml(d.vehicle.capacity) + ' seats · ' + escapeHtml(d.vehicle.model) + '</div></div>' +
+      '<div class="driver-rating">★ ' + escapeHtml(d.rating || '4.8') + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function selectDispatchDriver(driverId) {
+  _selectedDriver = driverId;
+  renderDispatch();
+  updateDispatchConfirm();
+}
+
+function updateDispatchConfirm() {
+  var btn = document.getElementById('dispatch-confirm-btn');
+  if (_selectedRoute && _selectedDriver) {
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+    btn.disabled = false;
+    var route = K.ROUTES.find(function(r){return r.id === _selectedRoute;});
+    var driver = K.DEMO_DRIVERS.find(function(d){return d.id === _selectedDriver;});
+    btn.textContent = 'Dispatch ' + (driver ? driver.name.split(' ')[0] : 'Driver') + ' → ' + (route ? route.name : 'Route');
+  } else {
+    btn.style.opacity = '0.5';
+    btn.style.cursor = 'not-allowed';
+    btn.disabled = true;
+    btn.textContent = 'Confirm Dispatch';
+  }
+}
+
+function confirmDispatch() {
+  if (!_selectedRoute || !_selectedDriver) return;
+  var shift = document.getElementById('dispatch-shift').value;
+  var date = document.getElementById('dispatch-date').value;
+  var driver = K.DEMO_DRIVERS.find(function(d){return d.id === _selectedDriver;});
+
+  K.appendDispatch({
+    driverId: _selectedDriver,
+    driverName: driver ? driver.name : 'Unknown',
+    routeId: _selectedRoute,
+    shift: shift,
+    date: date
+  });
+  alert('✅ ' + (driver ? driver.name : 'Driver') + ' dispatched to ' + _selectedRoute + ' (' + shift + ', ' + date + ')\n\nAll booked members on this route have been notified.');
+  _selectedRoute = null;
+  _selectedDriver = null;
+  renderDispatch();
+}
+
+// Keep old function as alias for backward compatibility
+function dispatchNow() { confirmDispatch(); }
+
+// ============ ROUTE REQUESTS ============
+function renderRouteRequests() {
+  var notifs = K.getNotifications('admin');
+  var requests = notifs.filter(function(n){
+    return n.meta && n.meta.type === 'route_request' && !n.meta.resolved;
+  });
+  var el = document.getElementById('route-requests-list');
+  if (!el) return;
+  if (requests.length === 0) {
+    el.innerHTML = '<div class="empty">No pending route requests</div>';
+    return;
+  }
+  el.innerHTML = requests.map(function(r){
+    var p = r.meta.proposed || {};
+    return '<div class="route-request-card">' +
+      '<div class="rr-header">' +
+        '<div class="rr-title">' + escapeHtml(p.origin || '?') + ' → ' + escapeHtml(p.destination || '?') + '</div>' +
+        '<div class="rr-meta">' + escapeHtml(r.meta.requestedByRole || 'user') + '</div>' +
+      '</div>' +
+      '<div class="rr-meta">From: ' + escapeHtml(r.meta.requestedByName || 'Unknown') + ' · ' + escapeHtml(p.time || '?') + ' ' + escapeHtml(p.shift || '') + (p.days ? ' · ' + escapeHtml(p.days.join(', ')) : '') + '</div>' +
+      (p.notes ? '<div class="rr-meta" style="margin-top:6px;font-style:italic;">"' + escapeHtml(p.notes) + '"</div>' : '') +
+      '<div class="rr-actions">' +
+        '<button class="btn btn-green" onclick="approveRouteRequest(\'' + r.id + '\')">Approve & Create Route</button>' +
+        '<button class="btn btn-ghost" onclick="dismissRouteRequest(\'' + r.id + '\')">Dismiss</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function approveRouteRequest(notifId) {
+  var notifs = K.getNotifications('admin');
+  var req = notifs.find(function(n){return n.id === notifId;});
+  if (!req || !req.meta) return;
+  var p = req.meta.proposed;
+  // Notify requester
+  K.appendNotification({
+    audience: req.meta.requestedByRole,
+    targetId: req.meta.requestedBy,
+    title: '✅ Route request approved!',
+    body: 'Your proposed route ' + (p.origin || '') + ' → ' + (p.destination || '') + ' has been approved. We will match a driver shortly.',
+    icon: 'green'
+  });
+  // Mark resolved on original
+  var shared = K.getShared();
+  var original = shared.notifications.find(function(n){return n.id === notifId;});
+  if (original && original.meta) original.meta.resolved = true;
+  K.appendNotification({
+    audience: 'admin',
+    title: 'Route approved',
+    body: 'New route ' + (p.origin || '') + ' → ' + (p.destination || '') + ' added to pending list',
+    icon: 'green'
+  });
+  alert('Route request approved. The requester has been notified.');
+  renderDispatch();
+}
+
+function dismissRouteRequest(notifId) {
+  if (!confirm('Dismiss this route request?')) return;
+  var shared = K.getShared();
+  var original = shared.notifications.find(function(n){return n.id === notifId;});
+  if (original && original.meta) original.meta.resolved = true;
+  renderRouteRequests();
+}
+
+// ============ SAFETY ============
+function renderSafety() {
+  var active = K.getActiveSos();
+  var resolved = (K.getShared().sos || []).filter(function(s){return s.resolved;}).slice(0, 10);
+  var listEl = document.getElementById('sos-list');
+  if (active.length === 0) {
+    listEl.innerHTML = '<div class="empty">✅ No active emergencies</div>';
+  } else {
+    listEl.innerHTML = active.map(function(s){
+      return '<div class="sos-card"><div class="sos-title">🚨 ' + escapeHtml(s.userName || s.source.toUpperCase()) + (s.tripId ? ' · Trip ' + escapeHtml(s.tripId.slice(0,8)) : '') + '</div><div class="sos-meta">Source: ' + escapeHtml(s.source) + ' · ' + escapeHtml(timeAgo(s.createdAt)) + '<br/>Location: ' + escapeHtml(s.location) + '</div><div class="sos-actions"><button class="btn btn-green" onclick="resolveSos(\'' + s.id + '\')">Mark Resolved</button><button class="btn btn-ghost" onclick="callSosUser(\'' + s.id + '\')">Call</button><button class="btn btn-red" onclick="alert(\'Escalated to local authorities\')">Escalate</button></div></div>';
+    }).join('');
+  }
+  var resolvedEl = document.getElementById('sos-resolved');
+  if (resolved.length === 0) {
+    resolvedEl.innerHTML = '<div class="empty">No resolved emergencies</div>';
+  } else {
+    resolvedEl.innerHTML = resolved.map(function(s){
+      return '<div class="log"><div>✅ ' + escapeHtml(s.userName || s.source) + (s.tripId ? ' · Trip ' + escapeHtml(s.tripId.slice(0,8)) : '') + '</div><div class="log-time">Resolved ' + escapeHtml(timeAgo(s.resolvedAt)) + '</div></div>';
+    }).join('');
+  }
+}
+
+// Safe lookup so an attacker-controlled userName can't break out of an inline
+// onclick handler (the name is no longer interpolated into the attribute).
+function callSosUser(id) {
+  var ev = (K.getActiveSos() || []).find(function(x){ return x.id === id; });
+  alert('Calling ' + ((ev && ev.userName) || 'user') + '...');
+}
+
+function resolveSos(id) {
+  if (!confirm('Mark this SOS as resolved?')) return;
+  K.resolveSos(id);
+  renderSafety();
+}
+
+function simulateSos() {
+  K.appendSos({
+    source: 'member',
+    userId: 'MBR-001',
+    userName: 'Chinedu Obi (TEST)',
+    tripId: (K.getTrips()[0] || {}).id || null
+  });
+  alert('Test SOS injected. Check the Safety Center.');
+  renderSafety();
+}
+
+// ============ BROADCASTS ============
+function renderBroadcasts() {
+  var s = K.getShared();
+  var recent = (s.notifications || []).filter(function(n){return n.meta && n.meta.broadcast;}).slice(0, 20);
+  // also include admin-sent ones identified by lack of targetId
+  var listEl = document.getElementById('bc-list');
+  var all = (s.notifications || []).slice(0, 30);
+  if (all.length === 0) { listEl.innerHTML = '<div class="empty">No notifications yet</div>'; return; }
+  listEl.innerHTML = all.map(function(n){
+    return '<div class="log" style="margin-bottom:8px"><div><strong>' + escapeHtml(n.title) + '</strong></div><div style="font-size:12px;margin-top:4px;color:var(--muted)">' + escapeHtml(n.body) + '</div><div class="log-time">→ ' + escapeHtml(n.audience) + (n.targetId ? ' (' + escapeHtml(n.targetId) + ')' : '') + ' · ' + escapeHtml(timeAgo(n.createdAt)) + '</div></div>';
+  }).join('');
+}
+
+function sendBroadcast() {
+  var aud = document.getElementById('bc-audience').value;
+  var title = document.getElementById('bc-title').value.trim();
+  var body = document.getElementById('bc-body').value.trim();
+  if (!title || !body) { alert('Please enter a title and message'); return; }
+  K.appendNotification({ audience: aud, title: title, body: body, icon: 'gold', meta: { broadcast: true } });
+  document.getElementById('bc-title').value = '';
+  document.getElementById('bc-body').value = '';
+  alert('Broadcast sent to ' + aud);
+  renderBroadcasts();
+}
+
+// ============ USERS (New Registrations vs Active) ============
+var _userTab = 'new';
+function switchUserTab(tab) {
+  _userTab = tab;
+  document.getElementById('utab-new').classList.toggle('active', tab==='new');
+  document.getElementById('utab-active').classList.toggle('active', tab==='active');
+  document.getElementById('users-tab-new').style.display = tab==='new' ? 'block' : 'none';
+  document.getElementById('users-tab-active').style.display = tab==='active' ? 'block' : 'none';
+  renderUsers();
+}
+
+function renderUsers() {
+  var q = ((document.getElementById('users-search')||{}).value || '').toLowerCase();
+  function matches(p){ return !q || (p.id+' '+p.name+' '+(p.phone||'')+' '+(p.email||'')).toLowerCase().indexOf(q) !== -1; }
+  var people = admPeople();
+
+  // ---- NEW REGISTRATIONS (status pending) ----
+  var pendingDrivers = people.filter(function(p){ return p.role==='driver' && p.status==='pending' && !p.blocked; }).filter(matches);
+  var pendingMembers = people.filter(function(p){ return p.role==='member' && p.status==='pending' && !p.blocked; }).filter(matches);
+
+  var newCount = pendingDrivers.length + pendingMembers.length;
+  var badge = document.getElementById('utab-new-count'); if (badge) { badge.textContent = newCount; badge.style.display = newCount? 'inline-block':'none'; }
+
+  var ndEl = document.getElementById('new-drivers');
+  if (ndEl) ndEl.innerHTML = pendingDrivers.length ? pendingDrivers.map(function(p){
+    return '<tr style="cursor:pointer;" onclick=\'inspectPerson("driver","'+p.id+'")\'>'+
+      '<td class="kbd">'+escapeHtml(p.id)+'</td><td>'+escapeHtml(p.name)+'</td><td style="font-size:12px;color:var(--muted);">'+escapeHtml(p.meta||'')+'</td>'+
+      '<td><span class="badge ac-pending">PENDING</span></td>'+
+      '<td onclick="event.stopPropagation();"><button class="ac-mini-btn btn-green" style="background:var(--green);color:#fff;margin-right:6px;" onclick="admApproveNew(\''+p.id+'\')">Approve</button>'+
+      '<button class="ac-mini-btn" style="background:var(--panel2);color:#f87171;" onclick="admRejectNew(\''+p.id+'\')">Reject</button></td></tr>';
+  }).join('') : '<tr><td colspan="5" style="color:var(--muted);padding:16px;">No pending driver applications 🎉</td></tr>';
+  var ndc = document.getElementById('new-drivers-count'); if (ndc) ndc.textContent = pendingDrivers.length ? '('+pendingDrivers.length+')' : '';
+
+  var nmEl = document.getElementById('new-members');
+  if (nmEl) nmEl.innerHTML = pendingMembers.length ? pendingMembers.map(function(p){
+    return '<tr style="cursor:pointer;" onclick=\'inspectPerson("member","'+p.id+'")\'>'+
+      '<td class="kbd">'+escapeHtml(p.id)+'</td><td>'+escapeHtml(p.name)+'</td><td>'+escapeHtml(p.phone||'—')+'</td>'+
+      '<td><span class="badge ac-pending">PENDING</span></td>'+
+      '<td onclick="event.stopPropagation();"><button class="ac-mini-btn btn-green" style="background:var(--green);color:#fff;margin-right:6px;" onclick="admApproveNew(\''+p.id+'\')">Approve</button>'+
+      '<button class="ac-mini-btn" style="background:var(--panel2);color:#f87171;" onclick="admRejectNew(\''+p.id+'\')">Reject</button></td></tr>';
+  }).join('') : '<tr><td colspan="5" style="color:var(--muted);padding:16px;">No pending member sign-ups 🎉</td></tr>';
+  var nmc = document.getElementById('new-members-count'); if (nmc) nmc.textContent = pendingMembers.length ? '('+pendingMembers.length+')' : '';
+
+  // ---- ACTIVE / EXISTING USERS (moderation) ----
+  var activeMembers = people.filter(function(p){ return p.role==='member' && p.status!=='pending'; }).filter(matches);
+  var activeDrivers = people.filter(function(p){ return p.role==='driver' && p.status!=='pending'; }).filter(matches);
+
+  function standing(p){ return p.blocked ? '<span class="badge ac-blocked">BLACKLISTED</span>' : (p.status==='restricted' ? '<span class="badge ac-pending">RESTRICTED</span>' : '<span class="badge ac-active">ACTIVE</span>'); }
+  function modBtns(p){
+    return '<div onclick="event.stopPropagation();" style="display:flex;gap:6px;margin-top:6px;">'+
+      (p.blocked ? '<button class="ac-mini-btn btn-green" style="background:var(--green);color:#fff;" onclick="admUnblock(\''+p.id+'\')">Reinstate</button>'
+                 : '<button class="ac-mini-btn" style="background:var(--panel2);color:var(--gold);" onclick="admRestrict(\''+p.id+'\')">Restrict</button>'+
+                   '<button class="ac-mini-btn" style="background:var(--panel2);color:#f87171;" onclick="admBlock(\''+p.id+'\')">Blacklist</button>')+
+      '</div>';
+  }
+
+  var mEl = document.getElementById('users-members');
+  if (mEl) mEl.innerHTML = activeMembers.length ? activeMembers.map(function(p){
+    return '<tr style="cursor:pointer;" onclick=\'inspectPerson("member","'+p.id+'")\'><td class="kbd">'+escapeHtml(p.id)+'</td><td>'+escapeHtml(p.name)+'</td><td>'+escapeHtml(p.phone||'—')+'</td><td>'+standing(p)+modBtns(p)+'</td></tr>';
+  }).join('') : '<tr><td colspan="4" style="color:var(--muted);padding:16px;">No active members match</td></tr>';
+
+  var dEl = document.getElementById('users-drivers');
+  if (dEl) dEl.innerHTML = activeDrivers.length ? activeDrivers.map(function(p){
+    return '<tr style="cursor:pointer;" onclick=\'inspectPerson("driver","'+p.id+'")\'><td class="kbd">'+escapeHtml(p.id)+'</td><td>'+escapeHtml(p.name)+'</td><td style="font-size:12px;color:var(--muted);">'+escapeHtml(p.meta||'')+'</td><td>'+standing(p)+modBtns(p)+'</td></tr>';
+  }).join('') : '<tr><td colspan="4" style="color:var(--muted);padding:16px;">No active drivers match</td></tr>';
+}
+
+// New-registration decisions
+function admApproveNew(id) {
+  if (typeof adminCan==='function' && !adminCan('moderate')) { alert('Your role cannot approve accounts.'); return; }
+  var o = admState(); o.status[id] = 'active'; delete o.blocked[id]; admSave(o);
+  if (typeof audit==='function') audit({type:'registration-approved', userId:id});
+  try { window.Komyut.appendNotification({ audience:'driver', targetId:id, title:'✅ Application approved', body:'Welcome aboard! Your Komyut account is now active.', icon:'green' }); } catch(e){}
+  renderUsers();
+}
+function admRejectNew(id) {
+  if (typeof adminCan==='function' && !adminCan('moderate')) { alert('Your role cannot reject accounts.'); return; }
+  if (!confirm('Reject this application? The applicant will need to re-apply.')) return;
+  var o = admState(); o.status[id] = 'rejected'; o.blocked[id] = true; admSave(o);
+  if (typeof audit==='function') audit({type:'registration-rejected', userId:id});
+  renderUsers();
+}
+function admRestrict(id) {
+  if (typeof adminCan==='function' && !adminCan('moderate')) { alert('Your role cannot restrict accounts.'); return; }
+  var o = admState(); o.status[id] = 'restricted'; admSave(o);
+  if (typeof audit==='function') audit({type:'user-restricted', userId:id});
+  renderUsers();
+}
+function admUnblock(id) {
+  if (typeof adminCan==='function' && !adminCan('moderate')) { alert('Your role cannot change accounts.'); return; }
+  var o = admState(); o.blocked[id] = false; o.status[id] = 'active'; admSave(o);
+  if (typeof audit==='function') audit({type:'user-reinstated', userId:id});
+  renderUsers();
+}
+
+// Click-to-inspect: shows the registration data admin needs (works for Users + Verification)
+function inspectPerson(role, id) {
+  // When connected to the backend and this is a real user id (UUID),
+  // use the live drill-down modal with full registration data + docs.
+  var isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  if (isUuid && window.AdminAPI && window.AdminAPI.isOnline && window.AdminAPI.isOnline()
+      && typeof window.openUserDetail === 'function') {
+    window.openUserDetail(id);
+    return;
+  }
+  var p = null;
+  if (role === 'member') {
+    p = K.DEMO_MEMBERS.find(function(x){return x.id===id;});
+    try { if(!p){ p = (window.KomyutStore.getStore().users.members||[]).find(function(x){return x.id===id;}); } } catch(e){}
+  } else {
+    p = K.DEMO_DRIVERS.find(function(x){return x.id===id;});
+    try { if(!p){ p = (window.KomyutStore.getStore().users.drivers||[]).find(function(x){return x.id===id;}); } } catch(e){}
+  }
+  if (!p) { alert('No record found'); return; }
+  var o = (typeof admState==='function') ? admState() : {status:{},blocked:{}};
+  var status = (o.status && o.status[id]) || 'active';
+  var blocked = !!(o.blocked && o.blocked[id]);
+  var rows = '';
+  function row(k,v,isHtml){ if(v===undefined||v===null||v==='') v='—'; var safe = isHtml ? v : escapeHtml(v); rows += '<div style="display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">'+escapeHtml(k)+'</span><span style="text-align:right;font-weight:600;word-break:break-word;">'+safe+'</span></div>'; }
+  row('ID', p.id);
+  row('Name', p.name);
+  row('Role', role.toUpperCase());
+  row('Phone', p.phone);
+  row('Email', p.email);
+  if (role === 'member') { row('Home area', p.home); row('Work area', p.work); row('Company', p.company || 'Personal'); }
+  else {
+    row('Vehicle', p.vehicle ? (p.vehicle.model||p.vehicle.make) : '—');
+    row('Plate', p.vehicle ? p.vehicle.plate : '—');
+    row('Capacity', p.vehicle ? p.vehicle.capacity : '—');
+    row('License', p.license || (p.vehicle && p.vehicle.license) || '—');
+    var docs = p.documents ? Object.keys(p.documents).length + ' uploaded' : '—';
+    row('Documents', docs);
+  }
+  row('Status', '<span class="badge ac-' + status + '">' + status.toUpperCase() + '</span>' + (blocked ? ' <span class="badge ac-blocked">BLACKLISTED</span>' : ''), true);
+
+  var canModerate = (typeof adminCan === 'function') ? adminCan('moderate') : true;
+  var actions = canModerate
+    ? '<button class="btn btn-green" onclick="admApprove(\'' + id + '\'); closeInspect();">Approve / Verify</button>' +
+      '<button class="btn" style="background:var(--panel2);color:#f87171;" onclick="admBlock(\'' + id + '\'); closeInspect();">Restrict / Blacklist</button>'
+    : '<div style="color:var(--muted);font-size:12px;">Your role can view but not change account status.</div>';
+
+  var modal = document.getElementById('person-inspect-modal');
+  if (!modal) { modal = document.createElement('div'); modal.id = 'person-inspect-modal'; modal.className = 'modal-overlay'; document.body.appendChild(modal); }
+  modal.innerHTML = '<div class="modal-card" style="max-width:460px;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><h3 style="margin:0;">' + p.name + '</h3><span onclick="closeInspect()" style="cursor:pointer;color:var(--muted);font-size:20px;">✕</span></div>' +
+    '<div style="font-size:13px;">' + rows + '</div>' +
+    '<div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">' + actions + '</div>' +
+    '</div>';
+  modal.classList.add('active');
+}
+function closeInspect() { var m = document.getElementById('person-inspect-modal'); if (m) m.classList.remove('active'); }
+
+// ============ ADMIN OVERRIDES LAYER (non-destructive) ============
+// Stores blocked/verification status + extra registrations + sub-admins
+// separately so the base account roster is never mutated.
+var ADM_KEY = 'komyut-admin-overrides';
+function admGet() {
+  try { return JSON.parse(localStorage.getItem(ADM_KEY)) || {}; } catch(e) { return {}; }
+}
+function admSave(o) { localStorage.setItem(ADM_KEY, JSON.stringify(o)); }
+function admDefault() {
+  return { status: {}, blocked: {}, staff: [{ id:'ADM-001', name:'Ada Okafor', role:'Platform Owner' }] };
+}
+function admState() {
+  var o = admGet();
+  if (!o.status) o.status = {};
+  if (!o.blocked) o.blocked = {};
+  if (!o.staff) o.staff = [{ id:'ADM-001', name:'Ada Okafor', role:'Platform Owner' }];
+  return o;
+}
+// Build a unified people list from the base roster + any newly-registered
+function admPeople() {
+  var o = admState();
+  var people = [];
+  K.DEMO_MEMBERS.forEach(function(m){
+    people.push({ id:m.id, name:m.name, phone:m.phone, email:m.email, role:'member',
+      meta:'Member · ' + m.email,
+      status: o.status[m.id] || 'active', blocked: !!o.blocked[m.id] });
+  });
+  K.DEMO_DRIVERS.forEach(function(d){
+    people.push({ id:d.id, name:d.name, phone:d.phone, email:d.email, role:'driver',
+      meta:d.vehicle.model + ' [' + d.vehicle.plate + '] · cap ' + d.vehicle.capacity,
+      status: o.status[d.id] || 'active', blocked: !!o.blocked[d.id] });
+  });
+  // Pull live-registered users from the shared store too
+  try {
+    var shared = window.KomyutStore.getStore();
+    (shared.users.members || []).forEach(function(m){
+      if (people.some(function(p){return p.id===m.id;})) return;
+      people.push({ id:m.id, name:m.name||m.fullName||'Member', phone:m.phone||'—', email:m.email||'—', role:'member',
+        meta:'Member (self-registered)', status:o.status[m.id]||'pending', blocked:!!o.blocked[m.id] });
+    });
+    (shared.users.drivers || []).forEach(function(d){
+      if (people.some(function(p){return p.id===d.id;})) return;
+      people.push({ id:d.id, name:d.name||'Driver', phone:d.phone||'—', email:d.email||'—', role:'driver',
+        meta:'Driver (self-registered)', status:o.status[d.id]||'pending', blocked:!!o.blocked[d.id] });
+    });
+  } catch(e){}
+  return people;
+}
+
+function renderVerify() {
+  var o = admState();
+  var roleF = (document.getElementById('verify-role')||{}).value || 'all';
+  var statF = (document.getElementById('verify-status')||{}).value || 'all';
+  var rows = admPeople().filter(function(p){
+    if (roleF !== 'all' && p.role !== roleF) return false;
+    if (statF !== 'all' && p.status !== statF) return false;
+    return true;
+  }).map(function(p){
+    var statusBadge = '<span class="badge ac-' + p.status + '">' + p.status.toUpperCase() + '</span>';
+    var approveBtn = p.status === 'pending'
+      ? '<button class="ac-mini-btn btn-green" style="background:var(--green);color:#fff;margin-right:6px;" onclick="event.stopPropagation(); admApprove(\'' + p.id + '\')">Approve</button>' : '';
+    var restrictBtn = '<button class="ac-mini-btn" style="background:var(--panel2);color:#f87171;" onclick="event.stopPropagation(); admBlock(\'' + p.id + '\')">Restrict</button>';
+    return '<tr style="cursor:pointer;" onclick=\'inspectPerson("' + p.role + '","' + p.id + '")\'><td class="kbd">' + p.id + '</td><td><strong>' + p.name + '</strong></td>'
+      + '<td>' + p.phone + '<br><span style="color:var(--muted);font-size:11px;">' + p.email + '</span></td>'
+      + '<td>' + p.role.toUpperCase() + '</td>'
+      + '<td style="font-size:12px;color:var(--muted);max-width:220px;">' + p.meta + '</td>'
+      + '<td>' + statusBadge + '</td><td>' + approveBtn + restrictBtn + '</td></tr>';
+  }).join('');
+  var tb = document.getElementById('verify-tbody');
+  if (tb) tb.innerHTML = rows || '<tr><td colspan="7" style="color:var(--muted);padding:20px;">No matching accounts</td></tr>';
+}
+function admApprove(id) {
+  if (typeof adminCan === 'function' && !adminCan('moderate')) { alert('Your role can view accounts but not change their status.'); return; }
+  var o = admState(); o.status[id] = 'active'; admSave(o);
+  if (typeof audit === 'function') audit({type:'user-approved', userId:id});
+  renderVerify();
+}
+function admBlock(id) {
+  if (typeof adminCan === 'function' && !adminCan('moderate')) { alert('Your role can view accounts but not change their status.'); return; }
+  var o = admState(); o.blocked[id] = true; admSave(o);
+  if (typeof audit === 'function') audit({type:'user-blocked', userId:id});
+  renderVerify(); renderAccounts();
+}
+
+function renderAccounts() {
+  var rows = admPeople().map(function(p){
+    var badge = '<span class="badge ' + (p.blocked?'ac-blocked':'ac-active') + '">' + (p.blocked?'BLACKLISTED':'OPERATIONAL') + '</span>';
+    var btn = p.blocked
+      ? '<button class="ac-mini-btn btn-green" style="background:var(--green);color:#fff;" onclick="admUnblockAccount(\'' + p.id + '\')">Lift Block</button>'
+      : '<button class="ac-mini-btn btn-red" style="background:var(--red);color:#fff;" onclick="admBlock(\'' + p.id + '\')">Terminate &amp; Blacklist</button>';
+    return '<tr><td class="kbd">' + escapeHtml(p.id) + '</td><td><strong>' + escapeHtml(p.name) + '</strong></td><td>' + escapeHtml(p.role.toUpperCase()) + '</td><td>' + badge + '</td><td>' + btn + '</td></tr>';
+  }).join('');
+  var tb = document.getElementById('accounts-tbody');
+  if (tb) tb.innerHTML = rows;
+}
+function admUnblockAccount(id) {
+  if (typeof adminCan==='function' && !adminCan('moderate')) { alert('Your role cannot change accounts.'); return; }
+  var o = admState(); delete o.blocked[id]; o.status[id] = 'active'; admSave(o);
+  if (typeof audit === 'function') audit({type:'user-unblocked', userId:id});
+  renderAccounts(); renderVerify();
+}
+
+function renderStaff() {
+  var o = admState();
+  var list = document.getElementById('staff-list');
+  if (!list) return;
+  list.innerHTML = o.staff.map(function(a){
+    var removable = a.id !== 'ADM-001'
+      ? '<button class="ac-mini-btn" style="background:var(--panel);color:#f87171;" onclick="removeAdminStaff(\'' + a.id + '\')">Remove</button>' : '';
+    return '<div class="ac-staff-card"><div><strong>' + escapeHtml(a.name) + '</strong><br><span style="font-size:11px;color:var(--blue);font-weight:600;">' + escapeHtml(a.role) + '</span> <span style="font-size:10px;color:var(--muted);">· ' + escapeHtml(a.id) + '</span></div>' + removable + '</div>';
+  }).join('');
+}
+function addAdminStaff() {
+  var name = (document.getElementById('staff-name').value||'').trim();
+  var role = document.getElementById('staff-role').value;
+  if (!name) { alert('Enter the staff member\'s full name.'); return; }
+  var o = admState();
+  o.staff.push({ id:'ADM-' + Math.floor(100+Math.random()*900), name:name, role:role });
+  admSave(o);
+  document.getElementById('staff-name').value = '';
+  if (typeof audit === 'function') audit({type:'admin-provisioned', name:name, role:role});
+  renderStaff();
+}
+function removeAdminStaff(id) {
+  var o = admState(); o.staff = o.staff.filter(function(a){return a.id !== id;}); admSave(o);
+  renderStaff();
+}
+
+function renderSupportSearch() {
+  var q = ((document.getElementById('support-search')||{}).value || '').toLowerCase();
+  var people = admPeople().filter(function(p){
+    return !q || p.name.toLowerCase().indexOf(q)>=0 || p.id.toLowerCase().indexOf(q)>=0
+      || (p.phone||'').indexOf(q)>=0 || (p.email||'').toLowerCase().indexOf(q)>=0;
+  });
+  var list = document.getElementById('support-results');
+  if (!list) return;
+  list.innerHTML = people.length ? people.map(function(p){
+    return '<div class="ac-result-row" onclick="supportInspect(\'' + p.id + '\')"><strong>' + escapeHtml(p.name) + '</strong> <span style="font-size:11px;color:var(--muted);">(' + escapeHtml(p.role.toUpperCase()) + ')</span><br><span style="font-size:11px;color:var(--muted);">' + escapeHtml(p.id) + ' · ' + escapeHtml(p.phone) + '</span></div>';
+  }).join('') : '<div style="color:var(--muted);font-size:13px;padding:10px;">No accounts match your search.</div>';
+}
+function supportInspect(id) {
+  var p = admPeople().find(function(x){return x.id===id;});
+  var panel = document.getElementById('support-detail');
+  if (!p || !panel) return;
+  var trips = [];
+  try { trips = K.getTrips(p.role === 'driver' ? {driverId:id} : {memberId:id}); } catch(e){}
+  var tripRows = trips.length ? trips.map(function(t){
+    var from = (t.pickup && t.pickup.name) || '—', to = (t.dropoff && t.dropoff.name) || '—';
+    return '<div style="font-size:12px;padding:6px 0;border-bottom:1px solid var(--line);">📍 ' + escapeHtml(from) + ' → ' + escapeHtml(to) + ' · <span style="color:var(--blue);">' + escapeHtml((t.status||'').toUpperCase()) + '</span> · ' + escapeHtml(t.shift||t.direction||'') + '</div>';
+  }).join('') : '<div style="color:var(--muted);font-size:12px;">No trips on record.</div>';
+  panel.innerHTML = '<div class="section-title">Inspecting: ' + escapeHtml(p.name) + '</div>'
+    + '<p style="font-size:13px;margin-top:10px;"><strong>ID:</strong> ' + escapeHtml(p.id) + '</p>'
+    + '<p style="font-size:13px;"><strong>Phone:</strong> ' + escapeHtml(p.phone) + '</p>'
+    + '<p style="font-size:13px;"><strong>Email:</strong> ' + escapeHtml(p.email) + '</p>'
+    + '<p style="font-size:13px;"><strong>Profile:</strong> ' + escapeHtml(p.meta) + '</p>'
+    + '<p style="font-size:13px;"><strong>Standing:</strong> ' + (p.blocked ? '<span style="color:#f87171;font-weight:700;">Blacklisted</span>' : '<span style="color:var(--green);font-weight:700;">Active</span>') + '</p>'
+    + '<div style="margin-top:14px;padding-top:10px;border-top:1px solid var(--line);"><strong style="font-size:13px;">Trip History (' + trips.length + ')</strong><div style="margin-top:6px;">' + tripRows + '</div></div>';
+}
+
+// ============ HELPERS ============
+function timeAgo(iso) {
+  if (!iso) return '—';
+  var sec = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (sec < 60) return Math.floor(sec) + 's ago';
+  if (sec < 3600) return Math.floor(sec/60) + 'm ago';
+  if (sec < 86400) return Math.floor(sec/3600) + 'h ago';
+  return Math.floor(sec/86400) + 'd ago';
+}
+
+// ============ GLOBAL ACTIONS ============
+function forceSync() { renderCurrentView(); }
+
+// ============ ROLE-BASED ACCESS CONTROL ============
+function adminSession() { try { return JSON.parse(localStorage.getItem('komyut-admin-session') || 'null') || {}; } catch(e) { return {}; } }
+function isSuperAdmin() { var s = adminSession(); return (s.role || '') === 'Platform Owner'; }
+// Permissions: Platform Owner = everything; Operations Lead = moderate but no destructive/reset.
+function adminCan(perm) {
+  var role = adminSession().role || '';
+  if (role === 'Platform Owner') return true;
+  if (role === 'Operations Lead') return perm === 'moderate' || perm === 'view';
+  return perm === 'view';
+}
+// Hide destructive controls for non-super admins
+function applyRoleGates() {
+  try {
+    var resetBtn = document.querySelector('[onclick="resetPlatform()"]');
+    if (resetBtn) resetBtn.style.display = isSuperAdmin() ? '' : 'none';
+  } catch(e){}
+}
+
+function resetPlatform() {
+  // Permission check: backend permissions take priority when online.
+  var canReset = (window.AdminPerms && window.AdminPerms.permissions)
+    ? !!window.AdminPerms.permissions.resetPlatform
+    : (typeof isSuperAdmin === 'function' ? isSuperAdmin() : false);
+  if (!canReset) {
+    alert('Restricted: only a Super Admin can reset the platform. Your role does not have this permission.');
+    return;
+  }
+  var key = prompt('SUPER ADMIN CONFIRMATION\n\nThis wipes ALL trips, dispatches, notifications and SOS events and cannot be undone.\n\nType your Super Admin access key to proceed:');
+  if (key !== 'KOMYUT-SUPER-2026') { alert('Incorrect access key. Platform data left untouched.'); return; }
+
+  // When connected, perform the authoritative reset on the backend too.
+  if (window.AdminAPI && window.AdminAPI.isOnline && window.AdminAPI.isOnline()) {
+    var scope = confirm('Also clear wallets & financial records?\n\nOK = full reset (all)\nCancel = operational only (trips)') ? 'all' : 'trips';
+    window.AdminAPI.resetPlatform(scope)
+      .then(function(){ K.reset(); setTimeout(function(){ K.seed(true); location.reload(); }, 300); })
+      .catch(function(e){ alert('Backend reset failed: ' + e.message); });
+    return;
+  }
+  K.reset();
+  setTimeout(function(){ K.seed(true); location.reload(); }, 300);
+}
+
+// ============ LIVE SUBSCRIPTIONS ============
+K.subscribe('*', function(){ renderCurrentView(); });
+window.addEventListener('komyut:event', function(){ renderCurrentView(); });
+setInterval(function(){ renderCurrentView(); try{applyRoleGates();}catch(e){} }, 5000); // safety auto-refresh
+try { applyRoleGates(); } catch(e){}
+
+// Safe console shim — some Android WebViews stub or remove console methods.
+// Defining them here prevents "console.X is not a function" from ever firing.
+(function() {
+  var noop = function() {};
+  var methods = ['log','info','warn','error','debug','trace','dir','table',
+                 'group','groupEnd','groupCollapsed','time','timeEnd','count',
+                 'assert','clear','profile','profileEnd'];
+  if (typeof window.console === 'undefined') window.console = {};
+  methods.forEach(function(m) {
+    if (typeof window.console[m] !== 'function') window.console[m] = noop;
+  });
+})();
+
+window.onerror = function(msg, src, line, col, err) {
+  // Silently swallow errors that are already caught; log the rest safely.
+  try { window.console.error('[Admin error]', msg, src && (src + ':' + line)); } catch(e) {}
+  return true; // prevent browser default error UI
+};
+
+// ============ INIT ============
+renderCurrentView();
+
+// ============ LIVE MAP ============
+// Map of Port Harcourt area (approximate bounds)
+// SW: 4.75°N, 6.98°E  NE: 4.90°N, 7.10°E
+var PH_BOUNDS = { swLat: 4.75, swLng: 6.98, neLat: 4.90, neLng: 7.10 };
+
+// ---- Leaflet live map (real OpenStreetMap tiles, no API key required) ----
+var _leafletMap = null;
+var _leafletMarkers = {};
+var _leafletLandmarksDrawn = false;
+
+function ensureLeafletMap() {
+  if (_leafletMap || typeof L === 'undefined') return _leafletMap;
+  var el = document.getElementById('livemap-leaflet');
+  if (!el) return null;
+  // Centered on Port Harcourt
+  _leafletMap = L.map(el, { zoomControl: true, attributionControl: true }).setView([4.8156, 7.0498], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(_leafletMap);
+
+  // Static operational landmarks (corridor hubs)
+  var landmarks = [
+    { lat: 4.815, lng: 7.049, name: 'Trans Amadi', color: '#2563eb' },
+    { lat: 4.860, lng: 7.020, name: 'Eliozu', color: '#16a34a' },
+    { lat: 4.830, lng: 7.030, name: 'Rumuokoro', color: '#ca8a04' },
+    { lat: 4.795, lng: 7.080, name: 'GRA Phase 2', color: '#ea580c' }
+  ];
+  landmarks.forEach(function(lm) {
+    L.circleMarker([lm.lat, lm.lng], {
+      radius: 7, color: lm.color, weight: 2, fillColor: lm.color, fillOpacity: 0.35
+    }).addTo(_leafletMap).bindTooltip(lm.name, { permanent: false, direction: 'top' });
+  });
+  // Fix tile rendering once the container is laid out
+  setTimeout(function(){ if (_leafletMap) _leafletMap.invalidateSize(); }, 200);
+  return _leafletMap;
+}
+
+function liveMarkerIcon(role) {
+  var color = role === 'driver' ? '#16a34a' : '#ea580c';
+  var glyph = role === 'driver' ? '🚐' : '👤';
+  return L.divIcon({
+    className: 'live-marker',
+    html: '<div style="position:relative;display:flex;align-items:center;justify-content:center;">'
+        + '<div style="position:absolute;width:34px;height:34px;border-radius:50%;background:' + color + ';opacity:0.25;animation:livePulse 2s infinite;"></div>'
+        + '<div style="width:24px;height:24px;border-radius:50%;background:' + color + ';display:flex;align-items:center;justify-content:center;font-size:13px;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);">' + glyph + '</div>'
+        + '</div>',
+    iconSize: [34, 34],
+    iconAnchor: [17, 17]
+  });
+}
+
+function renderLiveMap() {
+  if (!K.getAllLocations) return;
+  var map = ensureLeafletMap();
+  var locations = K.getAllLocations();
+  var noData = document.getElementById('livemap-no-data');
+  var driversListEl = document.getElementById('livemap-drivers');
+  var membersListEl = document.getElementById('livemap-members');
+
+  // If the map library couldn't load (offline / file viewer), show a clear notice
+  // instead of a blank box — the side lists below still work.
+  if (typeof L === 'undefined') {
+    var mapEl = document.getElementById('livemap-leaflet');
+    if (mapEl) mapEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:13px;text-align:center;padding:24px;">🗺️ Map tiles need an internet connection.<br>Live positions are still listed below.</div>';
+  }
+
+  if (map) {
+    map.invalidateSize();
+    var seen = {};
+    locations.forEach(function(loc) {
+      if (!loc.position) return;
+      var id = loc.role + '_' + loc.userId;
+      seen[id] = true;
+      var label = (loc.name || loc.userId || '').toString();
+      if (_leafletMarkers[id]) {
+        _leafletMarkers[id].setLatLng([loc.position.lat, loc.position.lng]);
+      } else {
+        _leafletMarkers[id] = L.marker([loc.position.lat, loc.position.lng], { icon: liveMarkerIcon(loc.role) })
+          .addTo(map)
+          .bindTooltip(label, { permanent: false, direction: 'top' });
+      }
+    });
+    // Remove markers that went stale
+    Object.keys(_leafletMarkers).forEach(function(id) {
+      if (!seen[id]) { map.removeLayer(_leafletMarkers[id]); delete _leafletMarkers[id]; }
+    });
+  }
+
+  if (noData) noData.style.display = locations.length > 0 ? 'none' : 'flex';
+
+  // Side lists
+  var drivers = locations.filter(function(l) { return l.role === 'driver'; });
+  var members = locations.filter(function(l) { return l.role === 'member'; });
+
+  if (driversListEl) {
+    driversListEl.innerHTML = drivers.length === 0
+      ? '<div class="empty">No drivers sharing location</div>'
+      : drivers.map(function(d) {
+          return '<div class="log dispatch" style="margin-bottom:8px;cursor:pointer;" onclick="focusLiveMarker(' + d.position.lat + ',' + d.position.lng + ')"><div><strong>' + (d.name || d.userId) + '</strong></div><div class="log-time">📍 ' + d.position.lat.toFixed(4) + ', ' + d.position.lng.toFixed(4) + ' · ' + timeAgo(d.updatedAt) + '</div></div>';
+        }).join('');
+  }
+  if (membersListEl) {
+    membersListEl.innerHTML = members.length === 0
+      ? '<div class="empty">No members sharing location</div>'
+      : members.map(function(m) {
+          return '<div class="log" style="margin-bottom:8px;cursor:pointer;" onclick="focusLiveMarker(' + m.position.lat + ',' + m.position.lng + ')"><div><strong>' + (m.name || m.userId) + '</strong></div><div class="log-time">📍 ' + m.position.lat.toFixed(4) + ', ' + m.position.lng.toFixed(4) + ' · ' + timeAgo(m.updatedAt) + '</div></div>';
+        }).join('');
+  }
+}
+
+function focusLiveMarker(lat, lng) {
+  if (_leafletMap) _leafletMap.setView([lat, lng], 15, { animate: true });
+}
+
+// Hook livemap into the view switcher
+(function() {
+  var origRender = window.renderCurrentView;
+  if (origRender) {
+    window.renderCurrentView = function() {
+      origRender.apply(this, arguments);
+      if (currentView === 'livemap') renderLiveMap();
+    };
+  }
+})();
+
+// Auto-refresh the live map every 3 seconds when it's the active view
+setInterval(function() {
+  if (currentView === 'livemap') renderLiveMap();
+}, 3000);
+</script>
+
+
+<!-- KOMYUT CHAT SYSTEM ENABLED -->
+<script>
+window.KomyutChat = window.KomyutChat || {
+  sendMessage: function (threadId, senderId, senderRole, message) {
+    const store = window.KomyutStore.getStore();
+
+    store.chats = store.chats || [];
+
+    let thread = store.chats.find(function (c) {
+      return c.id === threadId;
+    });
+
+    if (!thread) {
+      thread = {
+        id: threadId,
+        messages: []
+      };
+      store.chats.push(thread);
+    }
+
+    thread.messages.push({
+      id: 'MSG-' + Date.now(),
+      senderId: senderId,
+      senderRole: senderRole,
+      message: message,
+      timestamp: Date.now()
+    });
+
+    window.KomyutStore.setStore(store);
+  }
+};
+</script>
+
+
+<!-- ============================================================
+     KOMYUT ADMIN — REAL BACKEND CONNECTION LAYER
+     Connects to /api/* endpoints; falls back to localStorage data
+     gracefully when the server is unreachable (offline mode).
+     ============================================================ -->
+<script>
+(function () {
+  'use strict';
+
+  // ── CONFIG ────────────────────────────────────────────────────────────────
+  // The backend server. Change this to your deployed URL in production.
+  var API_BASE = (function() {
+    var stored = localStorage.getItem('komyut_admin_api_base');
+    if (stored) return stored;
+    // Default to the hosted backend so the admin works when opened from a file.
+    var DEFAULT_BACKEND = 'https://komyut-backend.onrender.com';
+    var protocol = window.location.protocol;
+    var host = window.location.hostname;
+    // Opened from a local file (file://) → use the hosted backend
+    if (protocol === 'file:' || !host) return DEFAULT_BACKEND;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:3000';
+    }
+    // Served from a real domain → if it's the render domain, use same origin,
+    // otherwise fall back to the known hosted backend.
+    if (host.indexOf('onrender.com') !== -1) return protocol + '//' + host;
+    return DEFAULT_BACKEND;
+  })();
+
+  // ── STATE ─────────────────────────────────────────────────────────────────
+  var _jwt = null;        // admin JWT from the backend
+  var _socket = null;     // Socket.IO connection
+  var _online = false;    // true when backend is reachable
+  var _apiLogEl = null;   // optional status indicator element
+
+  // ── STORAGE ───────────────────────────────────────────────────────────────
+  function saveJwt(token) {
+    _jwt = token;
+    try { sessionStorage.setItem('komyut_admin_jwt', token); } catch(e) {}
+  }
+  function loadJwt() {
+    if (_jwt) return _jwt;
+    try { _jwt = sessionStorage.getItem('komyut_admin_jwt') || null; } catch(e) {}
+    return _jwt;
+  }
+  function clearJwt() {
+    _jwt = null;
+    try { sessionStorage.removeItem('komyut_admin_jwt'); } catch(e) {}
+  }
+
+  // ── HTTP CLIENT ───────────────────────────────────────────────────────────
+  async function apiFetch(method, path, body) {
+    var jwt = loadJwt();
+    var headers = { 'Content-Type': 'application/json' };
+    if (jwt) headers['Authorization'] = 'Bearer ' + jwt;
+
+    var opts = { method: method || 'GET', headers: headers };
+    if (body && method !== 'GET') opts.body = JSON.stringify(body);
+
+    var res = await fetch(API_BASE + path, opts);
+
+    if (res.status === 401) {
+      clearJwt();
+      _online = false;
+      updateStatusIndicator('AUTH_EXPIRED');
+      return null;
+    }
+
+    if (!res.ok) {
+      var err = await res.json().catch(function() { return { error: res.statusText }; });
+      throw new Error(err.error || 'API error ' + res.status);
+    }
+
+    _online = true;
+    updateStatusIndicator('ONLINE');
+    return await res.json();
+  }
+
+  var api = {
+    get:    function(p)      { return apiFetch('GET',    p, null); },
+    post:   function(p, b)   { return apiFetch('POST',   p, b);    },
+    patch:  function(p, b)   { return apiFetch('PATCH',  p, b);    },
+    put:    function(p, b)   { return apiFetch('PUT',    p, b);    },
+    delete: function(p)      { return apiFetch('DELETE', p, null); },
+  };
+
+  // ── STATUS INDICATOR ──────────────────────────────────────────────────────
+  function updateStatusIndicator(state) {
+    var dot  = document.getElementById('status-dot');
+    var text = document.getElementById('status-text');
+    if (!dot || !text) return;
+    var map = {
+      ONLINE:       { color: 'var(--green)',  label: 'LIVE' },
+      OFFLINE:      { color: 'var(--orange)', label: 'OFFLINE' },
+      AUTH_EXPIRED: { color: 'var(--red)',    label: 'RE-AUTH' },
+      CONNECTING:   { color: 'var(--gold)',   label: 'CONNECTING' },
+    };
+    var s = map[state] || map.OFFLINE;
+    dot.style.background = s.color;
+    text.innerText = s.label;
+  }
+
+  // ── BACKEND AUTH ──────────────────────────────────────────────────────────
+  // Called after the admin HTML's own TOTP login succeeds.
+  // It then authenticates against the backend to get a real JWT.
+  async function backendSignIn(email, password) {
+    try {
+      updateStatusIndicator('CONNECTING');
+      // email field holds the phone number in this deployment
+      var result = await apiFetch('POST', '/api/auth/admin-login', { phone: email, pin: password, email: email, password: password });
+      if (!result || !result.token) throw new Error('No token received');
+      saveJwt(result.token);
+      _online = true;
+      updateStatusIndicator('ONLINE');
+      connectSocket(result.token);
+      console.info('[AdminAPI] Backend authenticated as:', result.admin && result.admin.name);
+      return true;
+    } catch (err) {
+      console.warn('[AdminAPI] Backend auth failed (offline mode):', err.message);
+      _online = false;
+      updateStatusIndicator('OFFLINE');
+      return false;
+    }
+  }
+
+  // ── HEALTH CHECK ──────────────────────────────────────────────────────────
+  async function healthCheck() {
+    try {
+      var r = await fetch(API_BASE + '/health', { method: 'GET' });
+      if (r.ok) {
+        _online = true;
+        updateStatusIndicator(_jwt ? 'ONLINE' : 'CONNECTING');
+      }
+    } catch (e) {
+      _online = false;
+      updateStatusIndicator('OFFLINE');
+    }
+  }
+
+  // ── SOCKET.IO REAL-TIME ───────────────────────────────────────────────────
+  function connectSocket(jwt) {
+    if (!jwt) return;
+    if (typeof io === 'undefined') {
+      // Try loading socket.io from the backend server
+      var s = document.createElement('script');
+      s.src = API_BASE + '/socket.io/socket.io.js';
+      s.onload = function() { connectSocket(jwt); };
+      document.head.appendChild(s);
+      return;
+    }
+    if (_socket && _socket.connected) return;
+
+    _socket = io(API_BASE, {
+      auth: { token: jwt },
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 2000,
+    });
+
+    _socket.on('connect', function() {
+      console.info('[AdminSocket] Connected');
+      _socket.emit('admin:join_monitoring');
+      updateStatusIndicator('ONLINE');
+    });
+
+    _socket.on('disconnect', function(reason) {
+      console.warn('[AdminSocket] Disconnected:', reason);
+      updateStatusIndicator('OFFLINE');
+    });
+
+    // ── Real-time event handlers ─────────────────────────────────────────
+    _socket.on('trip:created', function(data) {
+      appendLiveLog({ type: 'trip-created', routeId: (data.trip && data.trip.id) || 'NEW', at: new Date().toISOString() });
+      if (typeof renderCurrentView === 'function') renderCurrentView();
+    });
+
+    _socket.on('trip:accepted', function(data) {
+      appendLiveLog({ type: 'trip-updated', status: 'accepted', tripId: data.tripId });
+      if (typeof renderCurrentView === 'function') renderCurrentView();
+    });
+
+    _socket.on('trip:completed', function(data) {
+      appendLiveLog({ type: 'trip-updated', status: 'completed', tripId: data.tripId });
+      if (typeof renderCurrentView === 'function') renderCurrentView();
+    });
+
+    _socket.on('trip:cancelled', function(data) {
+      appendLiveLog({ type: 'trip-updated', status: 'cancelled', tripId: data.tripId });
+      if (typeof renderCurrentView === 'function') renderCurrentView();
+    });
+
+    _socket.on('safety:sos', function(data) {
+      appendLiveLog({ type: 'sos', source: data.userName || data.userId, at: data.at });
+      // Trigger SOS alert sound/flash if on safety view
+      if (typeof window.currentView !== 'undefined' && window.currentView === 'safety') {
+        if (typeof renderCurrentView === 'function') renderCurrentView();
+      } else {
+        // Badge-style alert: flash the safety nav button
+        var btn = document.querySelector('.nav button[data-view="safety"]');
+        if (btn) {
+          btn.style.background = 'var(--red)';
+          setTimeout(function() { btn.style.background = ''; }, 4000);
+        }
+      }
+    });
+
+    _socket.on('safety:sos_resolved', function(data) {
+      appendLiveLog({ type: 'sos-resolved', sosId: data.sosId });
+      if (typeof renderCurrentView === 'function') renderCurrentView();
+    });
+
+    _socket.on('driver:location', function(data) {
+      // Update the live map markers via the existing renderLiveMap helper
+      if (typeof window._liveDriverPositions === 'undefined') window._liveDriverPositions = {};
+      window._liveDriverPositions[data.driverId] = {
+        userId: data.driverId, name: data.driverName, role: 'driver',
+        position: { lat: data.lat, lng: data.lng },
+        updatedAt: data.timestamp,
+      };
+      if (typeof window.currentView !== 'undefined' && window.currentView === 'livemap') {
+        if (typeof renderLiveMap === 'function') renderLiveMap();
+      }
+    });
+
+    _socket.on('driver:status_changed', function(data) {
+      appendLiveLog({ type: 'driver-status', name: data.driverName, is_online: data.is_online });
+      if (typeof renderCurrentView === 'function') renderCurrentView();
+    });
+
+    _socket.on('withdrawal:requested', function(data) {
+      appendLiveLog({ type: 'withdrawal', name: data.driverName, amount: data.amount });
+      // Flash the dispatch-related view
+    });
+
+    _socket.on('broadcast_sent', function(data) {
+      appendLiveLog({ type: 'broadcast', audience: data.audience });
+    });
+
+    _socket.on('trip:message', function(data) {
+      if (!data._monitored) return; // only handle admin-monitored copy
+      if (typeof window.currentView !== 'undefined' && window.currentView === 'chatmon') {
+        if (typeof renderChatMonitor === 'function') renderChatMonitor();
+      }
+    });
+  }
+
+  // ── LIVE LOG HELPER ───────────────────────────────────────────────────────
+  function appendLiveLog(entry) {
+    // Append to the shared K state log so the existing log renderer picks it up
+    if (window.K && typeof window.K.audit === 'function') {
+      try { window.K.audit(entry); } catch(e) {}
+    }
+  }
+
+  // ── PUBLIC API CLIENT ─────────────────────────────────────────────────────
+  // These replace the localStorage-based K.* calls for the backend-aware views.
+
+  window.AdminAPI = {
+    isOnline:         function() { return _online; },
+    getJwt:           function() { return loadJwt(); },
+    backendSignIn:    backendSignIn,
+    healthCheck:      healthCheck,
+
+    // Dashboard
+    getDashboard: async function() {
+      if (!_online) return null;
+      return await api.get('/api/admin/dashboard/overview').catch(function() { return null; });
+    },
+
+    // Users
+    getUsers: async function(filters) {
+      if (!_online) return null;
+      var qs = filters ? '?' + new URLSearchParams(filters).toString() : '';
+      return await api.get('/api/admin/users' + qs).catch(function() { return null; });
+    },
+    getUserDetail: async function(userId) {
+      if (!_online) return null;
+      return await api.get('/api/admin/users/' + userId).catch(function() { return null; });
+    },
+    setUserActive: async function(userId, isActive) {
+      return await api.patch('/api/admin/users/' + userId + '/status', { is_active: isActive });
+    },
+
+    // Trips
+    getTrips: async function(filters) {
+      var qs = filters ? '?' + new URLSearchParams(filters).toString() : '';
+      return await api.get('/api/admin/trips/all' + qs).catch(function() { return null; });
+    },
+    getLiveTrips: async function() {
+      return await api.get('/api/admin/trips/live').catch(function() { return null; });
+    },
+    forceCancelTrip: async function(tripId, reason) {
+      return await api.post('/api/admin/trips/' + tripId + '/force-cancel', { reason: reason });
+    },
+
+    // SOS
+    getSosEvents: async function() {
+      return await api.get('/api/admin/sos').catch(function() { return null; });
+    },
+    resolveSos: async function(id) {
+      return await api.patch('/api/admin/sos/' + id + '/resolve');
+    },
+
+    // Online drivers (for live map)
+    getOnlineDrivers: async function() {
+      return await api.get('/api/drivers/online').catch(function() { return null; });
+    },
+
+    // Reports
+    getWeeklyReport: async function() {
+      return await api.get('/api/admin/reports/weekly').catch(function() { return null; });
+    },
+    getTopDrivers: async function(limit) {
+      return await api.get('/api/admin/reports/top-drivers?limit=' + (limit || 10)).catch(function() { return null; });
+    },
+
+    // Broadcasts
+    sendBroadcast: async function(audience, message) {
+      return await api.post('/api/admin/broadcasts', { audience: audience, message: message });
+    },
+    getBroadcasts: async function() {
+      return await api.get('/api/admin/broadcasts').catch(function() { return null; });
+    },
+
+    // Settings
+    getSettings: async function() {
+      return await api.get('/api/admin/settings').catch(function() { return null; });
+    },
+    updateSetting: async function(key, value) {
+      return await api.put('/api/admin/settings/' + key, { value: String(value) });
+    },
+
+    // Withdrawals
+    getWithdrawals: async function(filters) {
+      var qs = filters ? '?' + new URLSearchParams(filters).toString() : '';
+      return await api.get('/api/admin/withdrawals' + qs).catch(function() { return null; });
+    },
+    processWithdrawal: async function(id, status, notes) {
+      return await api.post('/api/admin/withdrawals/' + id + '/process', { status: status, notes: notes });
+    },
+
+    // Chat monitoring
+    getTripMessages: async function(tripId) {
+      return await api.get('/api/trips/' + tripId + '/messages').catch(function() { return null; });
+    },
+
+    // ── v3.1: RBAC, verification, moderation ──
+    getMyPermissions: async function() {
+      if (!_online) return null;
+      return await api.get('/api/admin/me/permissions').catch(function() { return null; });
+    },
+    getPendingVerifications: async function() {
+      return await api.get('/api/admin/verifications/pending').catch(function() { return null; });
+    },
+    verifyDriver: async function(driverId, decision, reason) {
+      return await api.post('/api/admin/drivers/' + driverId + '/verify', { decision: decision, reason: reason });
+    },
+    getDriverDocuments: async function(driverId) {
+      return await api.get('/api/admin/drivers/' + driverId + '/documents').catch(function() { return null; });
+    },
+    blockUser: async function(userId, blocked, reason) {
+      return await api.patch('/api/admin/users/' + userId + '/block', { blocked: blocked, reason: reason });
+    },
+    restrictUser: async function(userId, restricted, note) {
+      return await api.patch('/api/admin/users/' + userId + '/restrict', { restricted: restricted, note: note });
+    },
+    getRouteRequests: async function() {
+      return await api.get('/api/admin/route-requests').catch(function() { return null; });
+    },
+    updateRouteRequest: async function(id, status) {
+      return await api.patch('/api/admin/route-requests/' + id, { status: status });
+    },
+    getAuditLog: async function() {
+      return await api.get('/api/admin/audit-log').catch(function() { return null; });
+    },
+    getStaff: async function() {
+      return await api.get('/api/admin/staff').catch(function() { return null; });
+    },
+    setStaffRole: async function(userId, staffRole) {
+      return await api.patch('/api/admin/staff/' + userId + '/role', { staffRole: staffRole });
+    },
+    resetPlatform: async function(scope) {
+      return await api.post('/api/admin/platform/reset', { confirm: 'RESET', scope: scope || 'trips' });
+    },
+
+    // Config
+    setApiBase: function(url) {
+      API_BASE = url.replace(/\/$/, '');
+      localStorage.setItem('komyut_admin_api_base', API_BASE);
+      healthCheck();
+    },
+    getApiBase: function() { return API_BASE; },
+  };
+
+  // ── PATCH existing render functions to use backend data when online ────────
+
+  // Override renderDashboard to blend backend stats with localStorage
+  var _origRenderDashboard = window.renderDashboard;
+  window.renderDashboard = function() {
+    if (typeof _origRenderDashboard === 'function') _origRenderDashboard();
+
+    if (!window.AdminAPI.isOnline()) return; // offline: original function is enough
+
+    window.AdminAPI.getDashboard().then(function(data) {
+      if (!data) return;
+      // Update KPI metrics from real backend data
+      var members = document.getElementById('m-members');
+      var drivers = document.getElementById('m-drivers');
+      var revenue = document.getElementById('m-revenue');
+
+      if (members) members.innerText = (data.users && data.users.members) || 0;
+      if (drivers) drivers.innerText = (data.users && data.users.drivers) || 0;
+      if (revenue) revenue.innerText = '₦' + ((data.today_revenue && data.today_revenue.revenue) || 0).toLocaleString('en-NG');
+
+      // Live trips count
+      var trips = document.getElementById('m-trips');
+      if (trips) trips.innerText = data.today_trips || 0;
+    }).catch(function() {});
+
+    // Refresh fleet table from live trips
+    window.AdminAPI.getLiveTrips().then(function(data) {
+      if (!data || !data.trips) return;
+      var body = document.getElementById('fleet-body');
+      if (!body) return;
+      if (data.trips.length === 0) {
+        body.innerHTML = '<tr><td colspan="7" class="empty">No active trips right now</td></tr>';
+        return;
+      }
+      body.innerHTML = data.trips.slice(0, 12).map(function(t) {
+        var code = t.verification_code || t.verificationCode || '—';
+        var driverName = (t.driver_name || t.driver && t.driver.name) || '—';
+        var memberName = (t.member_name || t.member && t.member.name) || '—';
+        var fare = (parseFloat(t.fare || t.fare_kobo / 100 || 0)).toLocaleString('en-NG');
+        return '<tr>'
+          + '<td>' + escapeHtml(t.id ? t.id.slice(0, 8) + '…' : '—') + '</td>'
+          + '<td>' + escapeHtml(driverName) + '</td>'
+          + '<td>' + escapeHtml(memberName) + '</td>'
+          + '<td>' + escapeHtml(t.pickup_address || t.from || '—') + '</td>'
+          + '<td class="kbd">' + escapeHtml(String(code)) + '</td>'
+          + '<td><span class="badge ' + escapeHtml(t.status) + '">' + escapeHtml(t.status) + '</span></td>'
+          + '<td>₦' + fare + '</td>'
+          + '</tr>';
+      }).join('');
+    }).catch(function() {});
+  };
+
+  // Override renderSafety to load real SOS events
+  var _origRenderSafety = window.renderSafety;
+  window.renderSafety = function() {
+    if (typeof _origRenderSafety === 'function') _origRenderSafety();
+
+    if (!window.AdminAPI.isOnline()) return;
+
+    window.AdminAPI.getSosEvents().then(function(data) {
+      if (!data || !data.events) return;
+      var active = data.events.filter(function(e) { return e.status !== 'resolved'; });
+      var resolved = data.events.filter(function(e) { return e.status === 'resolved'; });
+
+      var activeEl   = document.getElementById('sos-active-body');
+      var resolvedEl = document.getElementById('sos-resolved-body');
+
+      if (activeEl) {
+        activeEl.innerHTML = active.length === 0
+          ? '<tr><td colspan="5" class="empty">No active SOS events</td></tr>'
+          : active.map(function(ev) {
+              var lat = ev.lat ? ev.lat.toFixed(4) : '—';
+              var lng = ev.lng ? ev.lng.toFixed(4) : '—';
+              return '<tr>'
+                + '<td class="kbd">' + escapeHtml(ev.user_name || ev.userId || '—') + '</td>'
+                + '<td>' + escapeHtml((ev.role || '').toUpperCase()) + '</td>'
+                + '<td>' + lat + ', ' + lng + '</td>'
+                + '<td>' + (ev.created_at ? new Date(ev.created_at).toLocaleTimeString() : '—') + '</td>'
+                + '<td>'
+                + '<button class="ac-mini-btn btn-green" style="background:var(--green);color:#fff;margin-right:6px;" onclick="resolveSOSBackend(\'' + ev.id + '\')">Resolve</button>'
+                + '<button class="ac-mini-btn" style="background:var(--panel2);" onclick="callSosUserBackend(\'' + ev.user_phone + '\')">Call</button>'
+                + '</td>'
+                + '</tr>';
+            }).join('');
+      }
+
+      if (resolvedEl) {
+        resolvedEl.innerHTML = resolved.length === 0
+          ? '<tr><td colspan="4" class="empty">No resolved events in last 24h</td></tr>'
+          : resolved.slice(0, 10).map(function(ev) {
+              return '<tr>'
+                + '<td>' + escapeHtml(ev.user_name || '—') + '</td>'
+                + '<td>' + escapeHtml((ev.role || '').toUpperCase()) + '</td>'
+                + '<td>' + (ev.resolved_at ? new Date(ev.resolved_at).toLocaleTimeString() : '—') + '</td>'
+                + '<td><span class="badge ac-active">RESOLVED</span></td>'
+                + '</tr>';
+            }).join('');
+      }
+    }).catch(function() {});
+  };
+
+  // Backend-aware SOS resolve
+  window.resolveSOSBackend = function(id) {
+    window.AdminAPI.resolveSos(id).then(function() {
+      if (typeof renderSafety === 'function') renderSafety();
+    }).catch(function(e) { alert('Failed to resolve: ' + e.message); });
+  };
+  window.callSosUserBackend = function(phone) {
+    if (phone && phone !== 'undefined') {
+      window.open('tel:' + phone);
+    } else {
+      alert('No phone number available.');
+    }
+  };
+
+  // Override renderUsers to load real users when online
+  var _origRenderUsers = window.renderUsers;
+  window.renderUsers = function() {
+    if (typeof _origRenderUsers === 'function') _origRenderUsers();
+
+    if (!window.AdminAPI.isOnline()) return;
+
+    // Load new registrations (drivers pending verification)
+    Promise.all([
+      window.AdminAPI.getUsers({ role: 'driver' }),
+      window.AdminAPI.getUsers({ role: 'member' }),
+    ]).then(function(results) {
+      var drivers = (results[0] && results[0].users) || [];
+      var members = (results[1] && results[1].users) || [];
+
+      // Update count badges
+      var dCount = document.getElementById('new-drivers-count');
+      var mCount = document.getElementById('new-members-count');
+      if (dCount) dCount.innerText = '(' + drivers.length + ')';
+      if (mCount) mCount.innerText = '(' + members.length + ')';
+
+      // Populate active users tables
+      var membersBody  = document.getElementById('active-members-body');
+      var driversBody  = document.getElementById('active-drivers-body');
+
+      if (membersBody) {
+        membersBody.innerHTML = members.length === 0
+          ? '<tr><td colspan="5" class="empty">No members</td></tr>'
+          : members.map(function(u) {
+              return '<tr style="cursor:pointer;" onclick="inspectPersonBackend(\'' + u.id + '\')">'
+                + '<td class="kbd">' + escapeHtml(u.id.slice(0,8)) + '</td>'
+                + '<td><strong>' + escapeHtml(u.name) + '</strong></td>'
+                + '<td>' + escapeHtml(u.phone) + '</td>'
+                + '<td>' + (u.wallet_balance !== undefined ? '₦' + parseFloat(u.wallet_balance).toLocaleString('en-NG') : '—') + '</td>'
+                + '<td><span class="badge ' + (u.active ? 'ac-active' : 'ac-blocked') + '">' + (u.active ? 'ACTIVE' : 'INACTIVE') + '</span></td>'
+                + '</tr>';
+            }).join('');
+      }
+
+      if (driversBody) {
+        driversBody.innerHTML = drivers.length === 0
+          ? '<tr><td colspan="5" class="empty">No drivers</td></tr>'
+          : drivers.map(function(u) {
+              return '<tr style="cursor:pointer;" onclick="inspectPersonBackend(\'' + u.id + '\')">'
+                + '<td class="kbd">' + escapeHtml(u.id.slice(0,8)) + '</td>'
+                + '<td><strong>' + escapeHtml(u.name) + '</strong></td>'
+                + '<td>' + escapeHtml(u.phone) + '</td>'
+                + '<td><span class="badge ' + (u.verified ? 'ac-active' : 'ac-pending') + '">' + (u.verified ? 'VERIFIED' : 'UNVERIFIED') + '</span></td>'
+                + '<td><span class="badge ' + (u.active ? 'ac-active' : 'ac-blocked') + '">' + (u.active ? 'ACTIVE' : 'INACTIVE') + '</span></td>'
+                + '</tr>';
+            }).join('');
+      }
+    }).catch(function() {});
+  };
+
+  // Inspect a user from the backend
+  window.inspectPersonBackend = function(userId) {
+    window.AdminAPI.getUserDetail(userId).then(function(data) {
+      if (!data || !data.user) return;
+      var u = data.user;
+      var m = document.getElementById('person-inspect-modal');
+      if (!m) return;
+      var panel = m.querySelector('.modal-card');
+      if (!panel) return;
+      var balance = u.wallet ? (Number(u.wallet.balance) / 100).toLocaleString('en-NG') : '0';
+      panel.innerHTML = '<div class="flex between center mb2"><div class="section-title">User Profile</div><button class="btn-ghost" style="padding:6px 14px;border-radius:8px;border:none;cursor:pointer;" onclick="closeInspect()">✕ Close</button></div>'
+        + '<div style="display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">ID</span><span style="font-weight:600;">' + escapeHtml(u.id) + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">Name</span><span style="font-weight:600;">' + escapeHtml(u.name) + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">Phone</span><span style="font-weight:600;">' + escapeHtml(u.phone) + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">Role</span><span style="font-weight:600;">' + escapeHtml((u.role || '').toUpperCase()) + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">Wallet</span><span style="font-weight:600;">₦' + balance + '</span></div>'
+        + '<div style="display:flex;justify-content:space-between;gap:16px;padding:8px 0;border-bottom:1px solid var(--line);"><span style="color:var(--muted);">Status</span><span style="font-weight:600;">' + (u.active ? '<span style="color:var(--green);">ACTIVE</span>' : '<span style="color:var(--red);">INACTIVE</span>') + '</span></div>'
+        + '<div style="margin-top:18px;display:flex;gap:10px;">'
+        + '<button class="ac-mini-btn btn-green" style="background:var(--green);color:#fff;" onclick="setUserActiveBackend(\'' + u.id + '\', true)">Activate</button>'
+        + '<button class="ac-mini-btn" style="background:var(--red);color:#fff;" onclick="setUserActiveBackend(\'' + u.id + '\', false)">Deactivate</button>'
+        + '</div>';
+      m.classList.add('active');
+    }).catch(function(e) { alert('Could not load user: ' + e.message); });
+  };
+
+  window.setUserActiveBackend = function(userId, isActive) {
+    window.AdminAPI.setUserActive(userId, isActive).then(function() {
+      if (typeof renderUsers === 'function') renderUsers();
+      if (typeof closeInspect === 'function') closeInspect();
+    }).catch(function(e) { alert('Failed: ' + e.message); });
+  };
+
+  // Override sendBroadcast to hit the real API
+  var _origSendBroadcast = window.sendBroadcast;
+  window.sendBroadcast = function() {
+    var msgEl = document.getElementById('broadcast-msg');
+    var audEl = document.getElementById('broadcast-audience');
+    if (!msgEl || !audEl) {
+      if (typeof _origSendBroadcast === 'function') _origSendBroadcast();
+      return;
+    }
+    var message  = (msgEl.value || '').trim();
+    var audience = audEl.value || 'all';
+    if (!message) { alert('Enter a message before sending.'); return; }
+
+    if (window.AdminAPI.isOnline()) {
+      window.AdminAPI.sendBroadcast(audience, message).then(function() {
+        msgEl.value = '';
+        if (typeof renderBroadcasts === 'function') renderBroadcasts();
+        alert('Broadcast sent to ' + audience + '.');
+      }).catch(function(e) { alert('Broadcast failed: ' + e.message); });
+    } else if (typeof _origSendBroadcast === 'function') {
+      _origSendBroadcast();
+    }
+  };
+
+  // Override renderBroadcasts to load from backend
+  var _origRenderBroadcasts = window.renderBroadcasts;
+  window.renderBroadcasts = function() {
+    if (typeof _origRenderBroadcasts === 'function') _origRenderBroadcasts();
+    if (!window.AdminAPI.isOnline()) return;
+    window.AdminAPI.getBroadcasts().then(function(data) {
+      if (!data || !data.broadcasts) return;
+      var el = document.getElementById('broadcast-history');
+      if (!el) return;
+      el.innerHTML = data.broadcasts.length === 0
+        ? '<div class="empty">No broadcasts yet</div>'
+        : data.broadcasts.map(function(b) {
+            return '<div class="log dispatch"><div>' + escapeHtml(b.message) + ' <span style="color:var(--muted);font-size:11px;">→ ' + escapeHtml(b.audience) + '</span></div>'
+              + '<div class="log-time">' + (b.sentAt || b.sent_at ? new Date(b.sentAt || b.sent_at).toLocaleString() : '—') + '</div></div>';
+          }).join('');
+    }).catch(function() {});
+  };
+
+  // Live map: override K.getAllLocations to blend backend data
+  if (window.K && !window.K._apiPatched) {
+    var _origGetAllLocations = window.K.getAllLocations;
+    window.K.getAllLocations = function() {
+      var local = _origGetAllLocations ? _origGetAllLocations.apply(window.K, arguments) : [];
+      var backendPositions = window._liveDriverPositions || {};
+      var backendArr = Object.values(backendPositions);
+      // Merge: backend positions override localStorage ones by userId
+      var merged = local.slice();
+      backendArr.forEach(function(bp) {
+        var idx = merged.findIndex(function(l) { return l.userId === bp.userId; });
+        if (idx >= 0) merged[idx] = bp;
+        else merged.push(bp);
+      });
+      return merged;
+    };
+    window.K._apiPatched = true;
+  }
+
+  // ── SETTINGS PANEL ────────────────────────────────────────────────────────
+  // Add a settings panel to the sidebar for configuring the API URL
+  window.showApiConfig = function() {
+    var currentBase = window.AdminAPI.getApiBase();
+    var url = prompt('Komyut Backend API URL:\n(e.g. https://api.komyut.ng or http://localhost:3000)', currentBase);
+    if (url !== null && url.trim()) {
+      window.AdminAPI.setApiBase(url.trim());
+      alert('API URL updated. Reconnecting…');
+      setTimeout(function() { window.location.reload(); }, 500);
+    }
+  };
+
+  // ── INIT SEQUENCE ─────────────────────────────────────────────────────────
+
+  // 1. Check if backend is reachable
+  healthCheck();
+
+  // 2. If we already have a saved JWT from this session, reconnect the socket
+  var existingJwt = loadJwt();
+  if (existingJwt) {
+    _online = true;
+    updateStatusIndicator('ONLINE');
+    connectSocket(existingJwt);
+  }
+
+  // 3. Hook into the admin HTML's login flow:
+  //    After TOTP verification passes, also authenticate against the backend.
+  var _origAdminLogin = window.adminLoginSubmit;
+  if (_origAdminLogin) {
+    // We extend the existing submit handler via event hook rather than overriding it,
+    // to avoid interfering with the lockout / TOTP logic.
+    document.addEventListener('komyut:admin-login-success', function(ev) {
+      var detail = ev && ev.detail;
+      if (detail && detail.email && detail.pass) {
+        backendSignIn(detail.email, detail.pass);
+      }
+    });
+  }
+
+  // 4. Expose backendSignIn globally so the TOTP handler can call it
+  window._adminBackendSignIn = backendSignIn;
+
+  // 5. Add API config link to the sidebar sync card (only if element exists)
+  document.addEventListener('DOMContentLoaded', function() {
+    var syncCard = document.querySelector('.sync-card');
+    if (syncCard) {
+      var link = document.createElement('button');
+      link.innerText = '⚙️ API Config';
+      link.style.cssText = 'width:100%;border:none;background:transparent;color:var(--muted);font-size:11px;cursor:pointer;padding:6px 0 0;text-align:left;';
+      link.onclick = showApiConfig;
+      syncCard.appendChild(link);
+    }
+  });
+
+  // 6. Poll backend every 30s when online to refresh dashboard data
+  setInterval(function() {
+    if (!_jwt) return;
+    healthCheck();
+  }, 30000);
+
+
+  // ════════════════════════════════════════════════════════════
+  //  v3.1 — RBAC gating, user drill-down modal, verification flow
+  // ════════════════════════════════════════════════════════════
+  window.AdminPerms = { staffRole: 'super_admin', permissions: {
+    manageUsers:true, approveDrivers:true, manageFinance:true,
+    monitorChat:true, resetPlatform:true, manageStaff:true } };
+
+  // Map nav tabs to the permission that should gate them.
+  var NAV_PERM = {
+    users:'manageUsers', verify:'approveDrivers', accounts:'manageUsers',
+    staff:'manageStaff', chatmon:'monitorChat'
+  };
+
+  function applyPermissionGating() {
+    var p = window.AdminPerms.permissions || {};
+    Object.keys(NAV_PERM).forEach(function(view){
+      var btn = document.querySelector('[data-view="'+view+'"]');
+      if (!btn) return;
+      if (NAV_PERM[view] && !p[NAV_PERM[view]]) btn.classList.add('perm-hidden');
+      else btn.classList.remove('perm-hidden');
+    });
+    // Show the signed-in staff role somewhere visible
+    var badge = document.getElementById('staff-role-badge');
+    if (badge) badge.textContent = (window.AdminPerms.staffRole || 'admin').replace('_',' ');
+  }
+
+  async function loadPermissions() {
+    if (!window.AdminAPI.isOnline()) { applyPermissionGating(); return; }
+    var r = await window.AdminAPI.getMyPermissions();
+    if (r && r.permissions) {
+      window.AdminPerms = { staffRole: r.staffRole, permissions: r.permissions };
+    }
+    applyPermissionGating();
+  }
+
+  // ── User / driver drill-down modal ───────────────────────────
+  function ensureUserModal() {
+    if (document.getElementById('user-modal')) return;
+    var el = document.createElement('div');
+    el.className = 'modal-overlay';
+    el.id = 'user-modal';
+    el.innerHTML =
+      '<div class="modal">' +
+        '<div class="modal-head"><div class="title" id="um-name">User</div>' +
+        '<button class="modal-close" onclick="closeUserModal()">✕</button></div>' +
+        '<div id="um-body"></div>' +
+      '</div>';
+    el.addEventListener('click', function(e){ if (e.target === el) closeUserModal(); });
+    document.body.appendChild(el);
+  }
+  window.closeUserModal = function(){ var m=document.getElementById('user-modal'); if(m) m.classList.remove('open'); };
+
+  function row(label, value){ return '<div class="status-row"><span>'+label+'</span><strong>'+(value==null||value===''?'—':value)+'</strong></div>'; }
+
+  window.openUserDetail = async function(userId) {
+    ensureUserModal();
+    var m = document.getElementById('user-modal');
+    var body = document.getElementById('um-body');
+    var nameEl = document.getElementById('um-name');
+    nameEl.textContent = 'Loading…';
+    body.innerHTML = '<div class="empty">Fetching registration data…</div>';
+    m.classList.add('open');
+
+    var data = await window.AdminAPI.getUserDetail(userId);
+    if (!data || !data.user) {
+      body.innerHTML = '<div class="empty">Could not load this user (offline or not found).</div>';
+      return;
+    }
+    var u = data.user, st = data.stats || {}, p = window.AdminPerms.permissions || {};
+    nameEl.textContent = u.name + (u.is_blocked ? ' · BLOCKED' : '');
+
+    var html = '';
+    html += row('Role', u.role);
+    html += row('Phone', u.phone);
+    if (u.email) html += row('Email', u.email);
+    html += row('Account type', u.user_type || 'normal');
+    if (u.company_name) html += row('Company', u.company_name);
+    html += row('Wallet', '₦' + Number(u.wallet_balance||0).toLocaleString());
+    html += row('Rating', (u.rating!=null? '⭐ '+u.rating : '—'));
+    html += row('Verification', u.verification_status || '—');
+    html += row('Standing', u.is_blocked ? 'Blocked' : (u.is_restricted ? 'Restricted' : 'Active'));
+    if (u.restriction_note) html += row('Note', u.restriction_note);
+    html += row('Registered', u.created_at ? new Date(u.created_at).toLocaleDateString() : '—');
+    html += row('Completed trips', st.completed_trips != null ? st.completed_trips : 0);
+    html += row('Cancelled trips', st.cancelled_trips != null ? st.cancelled_trips : 0);
+
+    // Driver: vehicle + documents
+    if (u.role === 'driver') {
+      if (data.vehicle) {
+        html += '<div class="section-title" style="margin-top:16px;">Vehicle</div>';
+        html += row('Model', data.vehicle.model);
+        html += row('Plate', data.vehicle.plate_number);
+        html += row('Colour', data.vehicle.color);
+        html += row('Capacity', data.vehicle.capacity);
+        html += row('Carries', data.vehicle.seat_preference);
+        if (data.vehicle.photo_url) {
+          html += '<div class="doc-grid"><div class="doc-thumb"><img src="'+data.vehicle.photo_url+'" alt="vehicle"><div class="doc-cap"><span>Vehicle</span></div></div></div>';
+        }
+      }
+      if (data.documents && data.documents.length) {
+        html += '<div class="section-title" style="margin-top:16px;">Documents</div><div class="doc-grid">';
+        data.documents.forEach(function(d){
+          var isImg = (d.document_url||'').indexOf('data:image')===0;
+          html += '<div class="doc-thumb">' +
+            (isImg ? '<img src="'+d.document_url+'" alt="'+d.document_type+'">' : '<div style="height:96px;display:flex;align-items:center;justify-content:center;">📄</div>') +
+            '<div class="doc-cap"><span>'+d.document_type.replace(/_/g,' ')+'</span><span>'+d.status+'</span></div></div>';
+        });
+        html += '</div>';
+      }
+    }
+
+    // Action buttons (gated by permission)
+    html += '<div class="modal-actions">';
+    if (u.role === 'driver' && p.approveDrivers && u.verification_status !== 'approved') {
+      html += '<button class="btn btn-green" onclick="doVerifyDriver(\''+u.id+'\',\'approved\')">✓ Approve driver</button>';
+      html += '<button class="btn btn-red" onclick="doVerifyDriver(\''+u.id+'\',\'rejected\')">✕ Reject</button>';
+    }
+    if (p.manageUsers) {
+      html += '<button class="btn btn-ghost" onclick="doRestrict(\''+u.id+'\','+(!u.is_restricted)+')">'+(u.is_restricted?'Remove restriction':'Restrict')+'</button>';
+      html += '<button class="btn '+(u.is_blocked?'btn-green':'btn-red')+'" onclick="doBlock(\''+u.id+'\','+(!u.is_blocked)+')">'+(u.is_blocked?'Unblock':'Block')+'</button>';
+    }
+    html += '</div>';
+    if (!p.manageUsers && !(u.role==='driver'&&p.approveDrivers)) {
+      html += '<div class="empty" style="padding:12px;">Your role can view but not modify this account.</div>';
+    }
+
+    body.innerHTML = html;
+  };
+
+  window.doVerifyDriver = async function(id, decision) {
+    var reason = decision === 'rejected' ? (prompt('Reason for rejection (optional):') || '') : '';
+    try { await window.AdminAPI.verifyDriver(id, decision, reason);
+      alert('Driver ' + decision + '.'); closeUserModal();
+      if (typeof renderVerify==='function') renderVerify();
+      if (typeof renderUsers==='function') renderUsers();
+    } catch(e){ alert('Action failed: ' + e.message); }
+  };
+  window.doBlock = async function(id, blocked) {
+    var reason = blocked ? (prompt('Reason for blocking (optional):') || '') : '';
+    try { await window.AdminAPI.blockUser(id, blocked, reason);
+      alert(blocked?'User blocked.':'User unblocked.'); closeUserModal();
+      if (typeof renderAccounts==='function') renderAccounts();
+      if (typeof renderUsers==='function') renderUsers();
+    } catch(e){ alert('Action failed: ' + e.message); }
+  };
+  window.doRestrict = async function(id, restricted) {
+    var note = restricted ? (prompt('Restriction note (optional):') || '') : '';
+    try { await window.AdminAPI.restrictUser(id, restricted, note);
+      alert(restricted?'User restricted.':'Restriction removed.'); closeUserModal();
+      if (typeof renderUsers==='function') renderUsers();
+    } catch(e){ alert('Action failed: ' + e.message); }
+  };
+
+  // Load permissions once the backend connection is established.
+  (function pollAuthThenGate(){
+    var tries = 0;
+    var iv = setInterval(function(){
+      tries++;
+      if (window.AdminAPI && window.AdminAPI.isOnline && window.AdminAPI.isOnline()) {
+        clearInterval(iv); loadPermissions();
+      } else if (tries > 20) { clearInterval(iv); applyPermissionGating(); }
+    }, 500);
+  })();
+
+
+  console.info('[AdminAPI] Connection layer ready. Backend:', API_BASE);
+})();
+</script>
+
+
+</body>
+</html>
