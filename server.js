@@ -59,12 +59,21 @@ app.use(helmet({
 }));
 
 // ── CORS ──────────────────────────────────────────────────────────
+// NOTE: During testing the apps are opened from file:// (Origin: null) and
+// from the Render domain, so we allow all origins. Lock this down to your
+// real web domain later by setting CORS_ORIGINS in the environment.
+const CORS_LOCKED = !!process.env.CORS_ORIGINS;
 app.use(cors({
   origin: function (origin, cb) {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-    // In development, be permissive; in production, enforce
-    if (NODE_ENV !== 'production') return cb(null, true);
-    cb(new Error(`CORS: origin "${origin}" not allowed`));
+    // No origin (mobile webview, curl, same-origin) → always allow
+    if (!origin) return cb(null, true);
+    // If you've explicitly set CORS_ORIGINS, enforce that allow-list
+    if (CORS_LOCKED) {
+      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS: origin "${origin}" not allowed`));
+    }
+    // Otherwise (testing mode) allow everything
+    return cb(null, true);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
@@ -1103,7 +1112,7 @@ app.get('/api/drivers/online', authenticate, authorize('admin'), async (req, res
 
 const io = new Server(server, {
   cors: {
-    origin: ALLOWED_ORIGINS,
+    origin: CORS_LOCKED ? ALLOWED_ORIGINS : true,  // allow all during testing
     methods: ['GET', 'POST'],
     credentials: true,
   },
