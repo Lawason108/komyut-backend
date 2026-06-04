@@ -123,6 +123,36 @@ app.get('/health', async (_req, res) => {
 });
 
 // ═══════════════════════════════════════════
+//  SERVE THE APPS (so they get a real https:// URL)
+//   /app   → passenger/driver app
+//   /admin → admin command center
+//  Serving from here means same-origin (no CORS issues) and no
+//  "open a local file" problems on phones. Also installable as a PWA.
+// ═══════════════════════════════════════════
+const STATIC_DIR = require('path').join(__dirname, 'public');
+app.get(['/app', '/app/*'], (_req, res) => {
+  const f = require('path').join(STATIC_DIR, 'komyut-app.html');
+  if (require('fs').existsSync(f)) return res.sendFile(f);
+  res.status(404).send('App file not found. Upload komyut-app.html to backend/public/');
+});
+app.get(['/admin', '/admin/*'], (_req, res) => {
+  const f = require('path').join(STATIC_DIR, 'komyut-admin.html');
+  if (require('fs').existsSync(f)) return res.sendFile(f);
+  res.status(404).send('Admin file not found. Upload komyut-admin.html to backend/public/');
+});
+// Landing page that links to both
+app.get('/', (_req, res) => {
+  res.type('html').send(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>Komyut</title>
+  <style>body{font-family:system-ui,sans-serif;background:#0b1f1c;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;gap:18px;padding:24px;text-align:center}
+  a{display:block;background:#0A5A4E;color:#fff;text-decoration:none;padding:16px 28px;border-radius:14px;font-size:18px;font-weight:600;width:260px;max-width:90vw}
+  a.admin{background:#1f3a34}.logo{font-size:54px}h1{margin:0;font-size:26px}p{opacity:.7;font-size:14px;max-width:320px;line-height:1.5}</style></head>
+  <body><div class="logo">🚐</div><h1>Komyut</h1><p>Open the app or the admin console. Tap the browser menu → "Add to Home screen" to install as an app.</p>
+  <a href="/app">🧑‍💼🚐 Open Passenger / Driver App</a>
+  <a class="admin" href="/admin">🛡️ Open Admin Console</a>
+  <p style="font-size:12px">First load may take ~45s while the free server wakes up.</p></body></html>`);
+});
+
+// ═══════════════════════════════════════════
 //  AUTH ROUTES  (/api/auth/*)
 //  Used by both the React web app (JWT pair)
 //  and the admin HTML (single JWT_SECRET token)
