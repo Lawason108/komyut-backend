@@ -1514,6 +1514,52 @@ app.post('/api/driver/availability', authenticate, authorize('driver'),
 app.set('io', io);
 
 // ═══════════════════════════════════════════
+//  ONE-TIME SETUP ROUTE  /setup
+//  Creates all tables + seeds test accounts.
+//  Safe to call multiple times (skips existing).
+// ═══════════════════════════════════════════
+app.get('/setup', async (_req, res) => {
+  try {
+    const fs   = require('fs');
+    const path = require('path');
+    const schema    = fs.readFileSync(path.join(__dirname, 'scripts', 'schema.sql'), 'utf8');
+    const migration = fs.readFileSync(path.join(__dirname, 'scripts', 'migration_v3.sql'), 'utf8');
+    await pool.query(schema);
+    await pool.query(migration);
+    const hash = await bcrypt.hash('1234', 12);
+    const accounts = [
+      { role: 'admin',  name: 'Komyut Admin', phone: '08000000000', balance: 0,    staff_role: 'super_admin' },
+      { role: 'driver', name: 'Emeka Okafor', phone: '08039876543', balance: 0,    staff_role: null },
+      { role: 'member', name: 'Chinedu Obi',  phone: '08031234567', balance: 5000, staff_role: null },
+    ];
+    const results = [];
+    for (const acc of accounts) {
+      const exists = await pool.query('SELECT id FROM users WHERE phone=$1', [acc.phone]);
+      if (exists.rows.length > 0) { results.push(acc.phone + ' already exists'); continue; }
+      const uid = uuidv4();
+      await pool.query(
+        `INSERT INTO users
+           (id,role,name,phone,password_hash,wallet_balance,is_active,
+            user_type,verification_status,staff_role)
+         VALUES ($1,$2,$3,$4,$5,$6,true,'normal','approved',$7)`,
+        [uid, acc.role, acc.name, acc.phone, hash, acc.balance, acc.staff_role]
+      );
+      if (acc.role === 'driver') {
+        await pool.query(
+          `INSERT INTO driver_status (driver_id,is_online,is_available) VALUES ($1,false,false)`,
+          [uid]
+        );
+      }
+      results.push(acc.phone + ' created ✓');
+    }
+    res.json({ ok: true, message: 'Setup complete', results });
+  } catch (err) {
+    console.error('Setup error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════
 //  ERROR HANDLERS
 // ═══════════════════════════════════════════
 app.use((err, req, res, _next) => {
